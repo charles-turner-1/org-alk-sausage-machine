@@ -1,0 +1,181 @@
+_____________________________________________
+
+Some notes on things which may appear unusual
+_____________________________________________
+
+156-157
+data is recorded during the titration every 20 seconds.
+I call this the index in the titration file eg index = 1 at 20s, index =2 at 40s, index = 3 at 60s etc etc
+after 200 seconds have passed, when index = 10, the sample has had an opportunity to come to 25oC.
+At this point the initial emf is recorded 
+"initial_EV_TA = df_TA.iloc[9]['102 Voltage (V)']"
+The titration procedure is to add an initial amount of acid to bring the pH to a predetermined value of 3.5, at index = 10.
+The now acidified seawater needs to be degassed by stirring it for 10 mins.
+Once 10 mins has elapsed, when index = 42, acid is added in increments of 0.2 mL. 
+As it is only the titration data past this point that is used in the TA calculations, I define this point as "data_start"
+
+161-172, 363-377
+Because the data used in subsequent TA calculation only included the values past the 'data_start' point, this section of code removes all unneeded data from each of the columns
+"df_TA.drop(df_TA.index[0:data_start_TA],axis=0)"
+The N/A values which arise as a result of removing these data points are removed 
+"stripped_df_TA = stripped_df_TA.dropna()"
+
+183-192, 306-316, 379-388
+The mass of the acid/base dispensed is a function of the temperature of the acid/base. As the temperature will vary slightly, although the volume dispensed each time may be equal the mass dispensed can be slightly different. These sections of code calculates the volume of each acid/base addition at each titration point and using the temperature-density function calculates the mass dispensed at each titration point. This is then summed to give a cumulative total of acid/base added.
+
+
+
+________________________________________________
+
+Sections of codes that can probably be functions
+in SausageMachine.py
+________________________________________________
+
+NOTE: (TA, NaOH, OrgAlk) indicates that function is carried out for Total Alkalinity titration, Sodium Hydroxide titration and/or Organic Alkalinity titration)
+
+
+150-157, 300-304, 355-360 (TA, NaOH, OrgAlk)
+Extracting data from titration .xlxs files  DONE
+
+183-192 and 306-316 (TA, NaOH, OrgAlk)
+Calculating mass of acid/base dispensed DONE
+
+161-172, 363-377 (TA, OrgAlk)
+Stripping data (explained above) DONE
+
+178, 303, 393 (TA, NaOH, OrgAlk)
+Converting sample temperature from degrees C to K DONE
+
+183-192, 306-316, 379-388 (TA, NaOH, OrgAlk)
+Calculating acid/base density and converting from volume to mass units DONE
+
+179, 334, 394 (TA, NaOH, OrgAlk)
+Calculating Nernst factor (SAMPLE TEMPERATURE MUST BE KNOWN IN ORDER TO DO THIS)
+
+194-199, 318-328, 398-404
+Calculating ionic strength from salinity
+Calculating ionic strength of sample at each titration point due to addition of acid/base
+Calculating salinity of sample at each titration point from previously calculated ionic strength
+
+218-222, 420-427 (TA, OrgAlk)
+Calculate Gran function, which allows for calculation of initial estimate of TA which is used in NLSF function
+Drops data points of Gran function which are not linear (BEST DESCRIBED BY A GRAPH - WILL SHOW YOU)
+Finds slope and intercept, which is used to calculate the x intercept
+x intercept used to calculate TA initial estimate
+
+224-227, 429-432 (TA, OrgAlk)
+Calculates an estimate of the standard reduction potential (EO) which in turn is used to provide an estimate of pH at each titration point
+
+223-235, 438-440 (TA, OrgAlk)
+Defines the TA charge balance equation and residual data frame column which is used in the NLSF procedure 
+
+238-268, 443-473 (TA, OrgAlk)
+Non Linear Least Squares curve fitting procedure to calculate alkalinity (adapted from https://lmfit.github.io/lmfit-py/intro.html)
+
+271-280, 476-488 (TA, OrgAlk)
+Extraction and reassigning results generated in alkalinity NLSF procedures 
+
+331-341 (NaOH)
+Calculate pH, [H+], [OH-] at each titration point of NaOH titration ONLY
+
+
+###########################################################################################
+NOTE: New In[] section so line numbers start at 1 again - "OrgAlk Characterisation" section
+###########################################################################################
+
+
+
+42-49
+Define charge balance which is used as the model in the NLSF curve fitting procedures
+There are 3 charge balance equations which I would like to allow the user to choose from (Cai1998a, Ko2016, Song2020) each is slightly different.
+
+50-54
+Some of the values associated with variables contained within "new_df_NaOH" will have NaN values (first 4 df_NaOH[m] values). This is because the NaOH titration is started at index=5.
+This section of code removes the NaN and resets the index so the NaN values don't throw up an error in the minimiser functions. 
+
+67-69
+To determine the value of the initial proton concentration (H0) and to constrain the concentration and 1st dissociation constant of organic acid X, (X1 and K_X1 respectively) all titration data up to pH 5 is used.
+These lines chop the titration file into this section e.g. pH 0 - 5
+
+71-73
+Once [H+]0 has been determined, and [X1] and KX1 have been constrained, their values are used with titration data in range 0-6.5* to determine final values for [X1] and KX1 and constrain values for [X2] and KX2
+*the upper range of this pH value is dependant on the final pH value
+
+
+
+_____________________________________________
+
+Minner and Figure functions
+_____________________________________________
+
+
+Minner_001 
+
+Titration data in the range 0-5 is used to obtain final value for H0 and estimates for X1, K_X1
+Initial estimate of H0 is calculated as the largest H+ value during the TA titration 
+Initial estimate of X1 is equal to the OrgAlk value obtained during OrgAlk titration 
+Initial estimate of KX_1 is equal literature values NOTE: if estimate is too far from true value NLSF procedure will fail
+C_NaOH is the concentration of NaOH in mol.kg-1. This value is already known and not allowed to vary during NLSF procedure
+The model used is the charge balance equation as described above (lines 42-49, "OrgAlk Characterisation" section)
+Running the Minner001 function returns a final value for H0 and estimates for X1, K_X1
+
+Figure_001
+
+The values of H0 and X1, K_X1 are then plugged back into charge balance equation which has been rearranged to isolate ['m'], which is mass of NaOH at each titration point
+This allows a calculated or model generated ['m'] value to be obtained (df_constrain_001["m_calc_001"])
+The calculated curve can be compared to the experimentally defined curve to obtain a sum of squared residuals value
+ssr_001 = np.sum((df_constrain_001['m']-df_constrain_001['m_calc_001'])**2)
+In theory the minimiser function should repeat itself until SSR_001 has reached convergence. 
+
+
+
+For Minner_002, 003, 004 and Figure_002, 003, 004
+The same principles apply, however which each consecutive minner function another X, K_X term is added.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+________________________________________________
+
+Sections of codes that relate to constants
+Some of these could be functions?
+________________________________________________
+
+R = 8.314472 # Universal gas constant
+F = 96485.3399 # Faraday constant
+
+Equilibrium Constants that are calculated for each point during titration from temperature (K) and/or salinity (POSSIBLE FUNCTIONS?)
+Bisulphate 
+Hydrogen Fluoride
+Boric acid
+Phosphoric Acid
+CO2 system
+
+Total concentrations of seawater ions that are calculated for each point during titration from temperature (K) and/or salinity (POSSIBLE FUNCTIONS?)
+Sulphate
+Hydrogen Fluoride
+Boron

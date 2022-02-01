@@ -1,0 +1,8 @@
++data_start == 42 is basically because of the time step to warm up to 25C - could be user specified
+		- Until data start, mL column doesn't change
+		- Can't delete empty cells but find first non empty cell which
+
+
++ Calculate ph, [H+], .... ( in base titration) is specific to base titration.
+
++ Tie the figure & the minimiser functions together such that it runs the minimiser until SSR converges to a value, and then plot the results.
