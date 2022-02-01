@@ -37,6 +37,8 @@ class org_alk_titration():
         self.df_NaOH = None
         self.df_BT = None
         self.V0 = None 
+        self.Va = None
+        self.Vb = None
         self.S_TA = None
         self.sample_id_TA = None
         self.data_start_TA = None
@@ -102,17 +104,21 @@ class org_alk_titration():
         self.df_NaOH["T"] = (self.df_NaOH["SAMPLE Temperature (°C)"]+kelvin_offset) #create column for sample temperature (KELVIN) at each titration point
         self.df_NaOH["NaOH_T"] = self.df_NaOH["NaOH Temperature (°C)"] #create colume for temperature (Degrees Celsius) of NaOH upon addition to cell 
     
-    def extract_BT_data(start_idx=0):
+    def extract_BT_data(self,start_idx=0):
+        df_TA_tmp = self.df_TA
+        df_NaOH_tmp = self.df_NaOH
+        self.Va = self.df_TA['m'][df_TA_tmp.index[-1]] #DEFINE TOTAL MASS OF ACID ADDED DURING FIRST (TA) TITRATION
+        self.Vb = self.df_NaOH['m'][df_NaOH_tmp.index[-1]] #DEFINE TOTAL MASS OF BASE ADDED DURING NAOH TITRATION
         self.V0_BT = (self.V0+Va+Vb) # Sample mass accounting for additions of acid and base (g) 
         self.sample_id_BT = df_BT.iloc[start_idx]['SAMPLE']  # Sample ID
         self.data_start_BT = int(df_BT.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
         
-    def strip_data(self,dataframe_name,start_idx=0,data_start=42):
-        if dataframe_name == "TA":
+    def strip_data(self,titration_label,start_idx=0,data_start=42):
+        if titration_label == "TA":
             dataframe = self.df_TA
-        elif dataframe_name == "NaOH":
+        elif titration_label == "NaOH":
             dataframe = self.df_NaOH
-        elif dataframe_name == "BT":
+        elif titration_label == "BT":
             dataframe = self.df_BT
         else:
             raise ValueError("Dataframe label not recognised")
@@ -126,14 +132,14 @@ class org_alk_titration():
         dataframe['Acid_T'] = dataframe.drop(dataframe.index[start_idx:data_start]
                                             ,axis=0)['ACID Temperature (°C)']
         dataframe['Acid_T'] = dataframe['Acid_T'].shift(-(data_start))
-        stripped_dataframe = dataframe[['E(V)', 'Sample_T', 'Acid_T', "mL"]].copy() #copy above variables to new "stripped_df"
+        stripped_dataframe = dataframe[['E(V)', 'Sample_T', 'Acid_T', "mL","m"]].copy() #copy above variables to new "stripped_df"
         stripped_dataframe = stripped_dataframe.dropna() #remove NaN values from stripped_df
         
-        if dataframe_name == "TA":
+        if titration_label == "TA":
             self.df_TA = stripped_dataframe
-        elif dataframe_name == "NaOH":
+        elif titration_label == "NaOH":
             self.df_NaOH = stripped_dataframe
-        elif dataframe_name == "BT":
+        elif titration_label == "BT":
             self.df_BT = stripped_dataframe
 
 
@@ -148,9 +154,18 @@ class org_alk_titration():
             raise ValueError("Titration label not recognised")
         return slope_rho, intercept_rho
         
-    def convert_vol_to_mass(titration_label,dataframe,initial_mL_base=0):
+    def convert_vol_to_mass(self,titration_label,dataframe,initial_mL_base=0):
         slope_rho, intercept_rho = density_curve_info(titration_label)
         df_T_label = titration_label + "_T"
+        
+        if titration_label == "TA":
+            dataframe = self.df_TA
+        elif titration_label == "NaOH":
+            dataframe = self.df_NaOH
+        elif titration_label == "BT":
+            dataframe = self.df_BT
+        else:
+            raise ValueError("Dataframe label not recognised")
 
         dataframe["rho"] = (dataframe[df_T_label]*slope_rho+intercept_rho) # Density of titrant g.cm-3 
         initial_g_base = initial_mL_base*dataframe.iloc[0]["rho"]#convert inital volume of base added to mass value (g)
@@ -159,6 +174,13 @@ class org_alk_titration():
         #dataframe = dataframe.fillna(0) #initial value of df['delta_g'] will be NA by default, replace with 0
         dataframe['delta_g'] = dataframe['delta_g'].fillna(0)
         dataframe['m'] = initial_g_base+np.cumsum(dataframe['delta_g'])#calculate cumulative total of mass of base added, (initial mass of acid added + increment mass 1,  initial mass of acid added + increment mass 1 + increment mass 2 ...)
+        
+        if titration_label == "TA":
+            self.df_TA = dataframe
+        elif titration_label == "NaOH":
+            self.df_NaOH = dataframe
+        elif titration_label == "BT":
+            self.df_BT = dataframe
         
     def calc_nernst_factor(titration_label,dataframe):
         T = dataframe["T"] = (dataframe["Sample_T"]+273.15)  # CREATE COLUMN SAMPLE TEMPERATURE (KELVIN) AT EACH TITRATION POINT
