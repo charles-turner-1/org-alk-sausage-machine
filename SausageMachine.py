@@ -46,6 +46,7 @@ class org_alk_titration():
         self.df_TA = None
         self.df_NaOH = None
         self.BT = None
+        self.mass_TA_known = False
         
     
 
@@ -105,6 +106,10 @@ class org_alk_titration():
         self.df_NaOH["NaOH_T"] = self.df_NaOH["NaOH Temperature (°C)"] #create colume for temperature (Degrees Celsius) of NaOH upon addition to cell 
     
     def extract_BT_data(self,start_idx=0):
+        
+        if self.mass_TA_known == False:
+            raise AssertionError("Total Alkalinity mass must be known. Run convert_vol_to_mass on TA data first")
+        
         df_TA_tmp = self.df_TA
         df_NaOH_tmp = self.df_NaOH
         self.Va = self.df_TA['m'][df_TA_tmp.index[-1]] #DEFINE TOTAL MASS OF ACID ADDED DURING FIRST (TA) TITRATION
@@ -155,7 +160,7 @@ class org_alk_titration():
         return slope_rho, intercept_rho
         
     def convert_vol_to_mass(self,titration_label,dataframe,initial_mL_base=0):
-        slope_rho, intercept_rho = density_curve_info(titration_label)
+        slope_rho, intercept_rho = self.density_curve_info(titration_label)
         df_T_label = titration_label + "_T"
         
         if titration_label == "TA":
