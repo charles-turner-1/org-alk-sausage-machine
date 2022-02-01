@@ -67,15 +67,15 @@ class org_alk_titration():
     C_NaOH = 0.082744091 # ± 0.000226775 determimed from acidic gran function of standardisation of NaOH using crm standardised HCl
     I_NaOH = 0.082744091 #ionic strength of NaOH 
     
-    def read_excel_spreadsheets(spreadsheets_path,TA_filename
-                                                 ,NaOH_filename
-                                                 ,BT_filename):
+    def read_excel_spreadsheets(self,TA_filename
+                               ,NaOH_filename
+                               ,BT_filename):
         # This function will read in the excel spreadsheets to memory 
         # containing the organic alkalinity titration
         
-        TA_filename_full = os.path.join(spreadsheets_path,TA_filename)
-        NaOH_filename_full = os.path.join(spreadsheets_path_NaOH,_filename)
-        BT_filename_full = os.path.join(spreadsheets_path,BT_filename)
+        TA_filename_full = os.path.join(self.dataset_path,TA_filename)
+        NaOH_filename_full = os.path.join(self.dataset_path,NaOH_filename)
+        BT_filename_full = os.path.join(self.dataset_path,BT_filename)
         
         self.df_TA = pd.read_excel(TA_filename_full)
         self.df_NaOH = pd.read_excel(NaOH_filename_full)
@@ -84,10 +84,12 @@ class org_alk_titration():
 
     
     
-    def extract_TA_data(start_idx=0,end_idx=9):
+    def extract_TA_data(self,start_idx=0,end_idx=9):
         # This should take the spreadsheet Dan gave me and save these data to 
         # the class instance. I've looked at it doesn't appear like the 
         # different titration classes can be all used as the same function.
+        
+        df_TA = self.df_TA
         
         self.V0 = df_TA.iloc[start_idx]['g_0']-df_TA.iloc[start_idx]['g_1'] # Sample mass (g)
         self.S_TA = df_TA.iloc[start_idx]['SALINITY']  # Sample Salinity 
@@ -95,17 +97,26 @@ class org_alk_titration():
         self.data_start_TA = int(df_TA.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
         self.initial_EV_TA = df_TA.iloc[end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
 
-    def extract_NaOH_data():
+    def extract_NaOH_data(self):
         kelvin_offset = 273.15
-        df_NaOH["T"] = (df_NaOH["SAMPLE Temperature (°C)"]+kelvin_offset) #create column for sample temperature (KELVIN) at each titration point
-        df_NaOH["NaOH_T"] = df_NaOH["NaOH Temperature (°C)"] #create colume for temperature (Degrees Celsius) of NaOH upon addition to cell 
+        self.df_NaOH["T"] = (self.df_NaOH["SAMPLE Temperature (°C)"]+kelvin_offset) #create column for sample temperature (KELVIN) at each titration point
+        self.df_NaOH["NaOH_T"] = self.df_NaOH["NaOH Temperature (°C)"] #create colume for temperature (Degrees Celsius) of NaOH upon addition to cell 
     
     def extract_BT_data(start_idx=0):
-        V0_BT = (V0+Va+Vb) # Sample mass accounting for additions of acid and base (g) 
-        sample_id_BT = df_BT.iloc[start_idx]['SAMPLE']  # Sample ID
-        data_start_BT = int(df_BT.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
+        self.V0_BT = (self.V0+Va+Vb) # Sample mass accounting for additions of acid and base (g) 
+        self.sample_id_BT = df_BT.iloc[start_idx]['SAMPLE']  # Sample ID
+        self.data_start_BT = int(df_BT.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
         
-    def strip_data(start_idx=0,data_start,dataframe):
+    def strip_data(self,dataframe_name,start_idx=0,data_start=42):
+        if dataframe_name == "TA":
+            dataframe = self.df_TA
+        elif dataframe_name == "NaOH":
+            dataframe = self.df_NaOH
+        elif dataframe_name == "BT":
+            dataframe = self.df_BT
+        else:
+            raise ValueError("Dataframe label not recognised")
+        
         dataframe['E(V)'] = dataframe.drop(dataframe.index[start_idx:data_start]
                                           ,axis=0)['102 Voltage (V)']
         dataframe['E(V)'] = dataframe['E(V)'].shift(-(data_start))
@@ -117,7 +128,14 @@ class org_alk_titration():
         dataframe['Acid_T'] = dataframe['Acid_T'].shift(-(data_start))
         stripped_dataframe = dataframe[['E(V)', 'Sample_T', 'Acid_T', "mL"]].copy() #copy above variables to new "stripped_df"
         stripped_dataframe = stripped_dataframe.dropna() #remove NaN values from stripped_df
-        dataframe = stripped_dataframe #for congruency with existing code, redefine stripped_df as df
+        
+        if dataframe_name == "TA":
+            self.df_TA = stripped_dataframe
+        elif dataframe_name == "NaOH":
+            self.df_NaOH = stripped_dataframe
+        elif dataframe_name == "BT":
+            self.df_BT = stripped_dataframe
+
 
     def density_curve_info(titration_label):
         if titration_label == "NaOH":
@@ -127,10 +145,10 @@ class org_alk_titration():
             slope_rho = -0.0008958
             intercept_rho = 1.02119193
         else:
-            error("Titration label not recognised"
+            raise ValueError("Titration label not recognised")
         return slope_rho, intercept_rho
         
-    def convert_vol_to_mass(initial_mL_base=0,titration_label,dataframe):
+    def convert_vol_to_mass(titration_label,dataframe,initial_mL_base=0):
         slope_rho, intercept_rho = density_curve_info(titration_label)
         df_T_label = titration_label + "_T"
 
@@ -147,7 +165,7 @@ class org_alk_titration():
         dataframe["K"] = (R*T)/F # Nernst factor 
         initial_K = dataframe.iloc[9]['K'] # Initial Nernst factor, used to calculate initial pH
         if titration_label == "BT":
-            initial_EV= dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
+            initial_EV = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
 
         
 
