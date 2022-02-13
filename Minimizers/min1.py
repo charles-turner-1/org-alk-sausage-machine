@@ -1,31 +1,31 @@
+
 ##################################################################
 ############################## 001 ###############################
 ##################################################################
 # Data in pH range 0-5 used to constrain H0, X1, K_X1
 ##################################################################
 
-def minner_001():
+def minner_001(dataframe):
     global H0, X1, K_X1
 
-    x_NaOH = df_constrain_001.m
-    data_NaOH = df_constrain_001.H
-
-
+    x_NaOH = dataframe['m']
+    data_NaOH = dataframe['H']
     # DEFINE FUNCTION WHICH RETURNS VALUE(S) TO BE MINIMISED, IN THIS CASE SSR 
+
     def fcn2min(params, x_NaOH, data_NaOH):
         H0 = params['H0']
         C_NaOH = params['C_NaOH']
         X1 = params['X1']
         K_X1 = params['K_X1']
 
-        model = ((V0 + Va+ df_constrain_001["m"])*(df_constrain_001["H"]-df_constrain_001["OH"]) 
+        model = ((V0 + Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                  -((V0+Va)*H0)
-                 +(df_constrain_001["m"]*C_NaOH) 
-                 #- V0*(BT/(1+df_constrain_001["H"]/df_constrain_001["KB"]))
-                 - (V0)*(CO2/(1+(df_constrain_001["H"]/(df_constrain_001["K1_LK"]))+df_constrain_001["K2_LK"]/df_constrain_001["H"]))
-                 - (V0)*(X1/(1+df_constrain_001["H"]/K_X1))
-                 #- (V0)*(X2/(1+df_constrain_001["H"]/K_X3))
-                 #- (V0)*(X2/(1+df_constrain_001["H"]/K_X3))
+                 +(dataframe["m"]*C_NaOH) 
+                 #- V0*(BT/(1+dataframe["H"]/dataframe["KB"]))
+                 - (V0)*(CO2/(1+(dataframe["H"]/(dataframe["K1_LK"]))+dataframe["K2_LK"]/dataframe["H"]))
+                 - (V0)*(X1/(1+dataframe["H"]/K_X1))
+                 #- (V0)*(X2/(1+dataframe["H"]/K_X3))
+                 #- (V0)*(X2/(1+dataframe["H"]/K_X3))
                 )
 
 

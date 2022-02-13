@@ -6,11 +6,13 @@
 # All data used to constrain X2, KX2
 ##################################################################
 
-def minner_003():
-    global H0, C_NaOH, X1, K_X1, X2, K_X2, X3, K_X3
+def minner_003(dataframe):
+    global H0, X1
+    global C_NaOH, K_X1, X2, K_X2
+    global X3, K_X3
     
-    x_NaOH = df_NaOH.m
-    data_NaOH = df_NaOH.H
+    x_NaOH = dataframe['m']
+    data_NaOH = dataframe['H']
     # DEFINE FUNCTION WHICH RETURNS VALUE(S) TO BE MINIMISED, IN THIS CASE SSR 
     def fcn2min(params, x_NaOH, data_NaOH):
         H0 = params['H0']
@@ -22,14 +24,14 @@ def minner_003():
         X3 = params['X3']
         K_X3 = params['K_X3']
 
-        model = ((V0 + Va+ df_NaOH["m"])*(df_NaOH["H"]-df_NaOH["OH"]) 
+        model = ((V0 + Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                  -((V0+Va)*H0)
-                 +(df_NaOH["m"]*C_NaOH) 
-                 #- V0*(BT/(1+df_NaOH["H"]/df_NaOH["KB"]))
-                 - (V0)*(CO2/(1+(df_NaOH["H"]/(df_NaOH["K1_LK"]))+df_NaOH["K2_LK"]/df_NaOH["H"]))
-                 - (V0)*(X1/(1+df_NaOH["H"]/K_X1))
-                 - (V0)*(X2/(1+df_NaOH["H"]/K_X2))
-                 - (V0)*(X3/(1+df_NaOH["H"]/K_X3))
+                 +(dataframe["m"]*C_NaOH) 
+                 #- V0*(BT/(1+dataframe["H"]/dataframe["KB"]))
+                 - (V0)*(CO2/(1+(dataframe["H"]/(dataframe["K1_LK"]))+dataframe["K2_LK"]/dataframe["H"]))
+                 - (V0)*(X1/(1+dataframe["H"]/K_X1))
+                 - (V0)*(X2/(1+dataframe["H"]/K_X2))
+                 - (V0)*(X3/(1+dataframe["H"]/K_X3))
                 )
 
 
