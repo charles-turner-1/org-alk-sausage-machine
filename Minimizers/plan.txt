@@ -1,0 +1,8 @@
+It seems to me that each minimizer is basically the same, and relies on a few global variables, a boolean table and a bunch of terms.
++ Global variables seems to be basically to do with carbonate chemistry constants and whatnot. 
+ - This is I assume because we vary what we are changing on each iteration. 
+ - These can probably therefore be state variables associated with the class.
++ The boolean table in question will tell us which quantities we aim to minimise. 
+ - It looks like this can be implemented as a nested class, I'm not sure if this is the best way to do it. 
++ The terms we need to include is going to be slightly more complicated, but it's broadly the same thing as the boolean table. 
+ - Probably shouldn't be too complicated to include? Either we can build the model piecewise using some sort of construct_model functionality, or we can just have each of the different models saved in a function or something that will return us the model we want based on the minimizer we are using.
