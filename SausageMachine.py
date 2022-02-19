@@ -464,3 +464,19 @@ class org_alk_titration():
 
 
 
+    def build_model(minimiser_no):
+        BT_factors = [0, 0, 0, 0]
+        KX2_factors = [0, 1, 1, 1]
+        KX3_factors = [0, 0, 1, 1]
+
+        model= ((V0 + Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"])
+                 -((V0+Va)*H0)
+                 +(dataframe["m"]*C_NaOH)
+                 - BT_factors[minimiser_no+1] * V0*(BT/(1+dataframe["H"]/dataframe["KB"]))
+                 - (V0)*(CO2/(1+(dataframe["H"]/(dataframe["K1_LK"]))+dataframe["K2_LK"]/dataframe["H"]))
+                 - (V0)*(X1/(1+dataframe["H"]/K_X1))
+                 - KX2_factors[minimiser_no+1] * (V0)*(X2/(1+dataframe["H"]/K_X2))
+                 - KX3_factors[minimiser_no+1] * (V0)*(X3/(1+dataframe["H"]/K_X3))
+                )
+
+        return model
