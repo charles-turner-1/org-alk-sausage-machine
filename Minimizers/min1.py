@@ -52,5 +52,6 @@ def minner_001(dataframe):
 
     X1 = result.params.get('X1').value
     X1_std = result.params.get('X1').stderr
+
     K_X1 = result.params.get('K_X1').value
     K_X1_std = result.params.get('K_X1').stderr
