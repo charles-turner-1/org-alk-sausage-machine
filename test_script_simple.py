@@ -9,16 +9,18 @@ Created on Tue Feb  1 14:47:18 2022
 import SausageMachine
 
 
-titration_test = SausageMachine.org_alk_titration("/home/ct/DanKerr/")
+tit = SausageMachine.org_alk_titration("~/Python/org-alk-sausage-machine")
 
-titration_test.read_excel_spreadsheets("01.09.21.50UM.001_PROCESSED.xlsx",
+tit.read_excel_spreadsheets("01.09.21.50UM.001_PROCESSED.xlsx",
                                        "01.09.21.50UM.001.NAOH_PROCESSED.xlsx",
                                        "01.09.21.50UM.001.BT_PROCESSED.xlsx")
 
-titration_test.pipeline()
+tit.pipeline()
 
+tit.init_minimiser()
 
-
+tit.dissociation_consts()
+tit.minimise(1)
 
 # tit = SausageMachine.org_alk_titration("/home/ct/DanKerr")
 # tit.read_excel_spreadsheets("01.09.21.50UM.001_PROCESSED.xlsx",

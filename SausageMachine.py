@@ -202,7 +202,7 @@ class org_alk_titration():
         elif titration_label == "BT":
             dataframe = self.df_BT
             df_T_label = "Acid_T"
-            initial_mL = dataframe.iloc[0]["mLs"]
+            initial_mL = dataframe.iloc[0]["mL"]
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -479,24 +479,30 @@ class org_alk_titration():
         else:
             raise ValueError("Dissociation constants not recognised")
 
-        Boron *= 0.0004157*S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
-        CO2 *= 14.9935212785335*(self.Vb/1000)
+        dataframe['KB'] = ( (-8966.90 - 2890.53*dataframe["S"]**0.5 
+                          - 77.942*dataframe["S"] + 1.728*dataframe["S"]**1.5 
+                          - 0.0996*dataframe["S"]**2)/dataframe["T"]
+                          + (148.0248 + 137.1942*dataframe["S"]**0.5 + 1.62142*dataframe["S"])
+                          + (-24.4344-25.085*dataframe["S"]**0.5 - 0.2474*dataframe["S"])
+                          *np.log(dataframe["T"])+ (0.053105*dataframe["S"]**0.5)*dataframe["T"] )
+        self.Boron = Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
+        self.CO2 = CO2 * 14.9935212785335*(self.Vb/1000)
         # Since Boron and CO2 are both false by default, I'm pretty sure that this should make sure they don't contribute 
         # unless specified.
 
         Xi = 1*10**-6 #SIMULATED value
         Ki = 10**-4.5 #SIMULATED value
 
-        dataframe['CB'] = (V0*(Xi/(1+dataframe["H"]/Ki))
-                                    + V0*(Boron/(1+dataframe["H"]/dataframe["KB"]))
-                                    + V0*(CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"])) 
-                                    - (V0 + Va + dataframe['m'])*(dataframe["H"]-dataframe["OH"]) 
-                                    + (V0 + Va)*H0
-                                    - dataframe['m']*C_NaOH
+        dataframe['CB'] = (self.V0*(Xi/(1+dataframe["H"]/Ki))
+                                    + self.V0*(self.Boron/(1+dataframe["H"]/dataframe["KB"]))
+                                    + self.V0*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"])) 
+                                    - (self.V0 + self.Va + dataframe['m'])*(dataframe["H"]-dataframe["OH"]) 
+                                    + (self.V0 + self.Va)*self.H0
+                                    - dataframe['m']*self.C_NaOH
                                    )
 
         cleaned_dataframe = dataframe[["H", "OH", "m", "K1", "K2","pK1", "pK2", "pH"
-                                           ,"K1", "K2","pK1", "pK2", "KB",  'CB']].copy
+                                      ,"KB",  'CB']].copy()
 
         cleaned_dataframe.dropna(inplace=True)
         cleaned_dataframe.reset_index(inplace=True)
@@ -504,32 +510,42 @@ class org_alk_titration():
 
 
     def init_minimiser(self):
-        self.X1_init = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
-        self.X2_init = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
-        self.X3_init = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
+        self.X1 = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
+        self.X2 = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
+        self.X3 = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
 
-        self.K_X1_init = 10**-4.5 #midpoint pH 3 - 7
-        self.K_X2_init = 10**-5.25 #midpoint pH 3 - 7.5
-        self.K_X3_init = 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
+        self.K_X1 = 10**-4.5 #midpoint pH 3 - 7
+        self.K_X2 = 10**-5.25 #midpoint pH 3 - 7.5
+        self.K_X3 = 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
 
-        self.H0 = self.C_NaOH = None
-        self.X1 = self.K_X1 = None
-        self.X2  = self.K_X2 = None
-        self.X3 = self.K_X3 = None
-
-    def build_model(minimiser_no):
+    def build_model(self,minimiser_no):
         BT_factors = [0, 0, 0, 0]
+        self.BT = 0 # BT is still uninitialised and is causing type errors
         KX2_factors = [0, 1, 1, 1]
         KX3_factors = [0, 0, 1, 1]
+        
+        # This isn't very clean: I've basically done the exact same thing at
+        # the start of the minimise function. This should be tidied at some 
+        # point
+        if minimiser_no == 1:
+            dataframe = self.cleaned_dataframe
+            dataframe = dataframe[dataframe["pH"].between(0, 5)]
+        elif minimiser_no == 2:
+            dataframe = self.cleaned_dataframe
+            dataframe = dataframe[dataframe["pH"].between(0, 6.5)]
+        elif minimiser_no == 3 or minimiser_no == 4:
+            dataframe = self.df_NaOH
+        else:
+            raise ValueError("minimiser_no must be between 1 and 4")
 
-        model= ((V0 + Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"])
-                 -((V0+Va)*H0)
-                 +(dataframe["m"]*C_NaOH)
-                 - BT_factors[minimiser_no+1] * V0*(BT/(1+dataframe["H"]/dataframe["KB"]))
-                 - (V0)*(CO2/(1+(dataframe["H"]/(dataframe["K1_LK"]))+dataframe["K2_LK"]/dataframe["H"]))
-                 - (V0)*(X1/(1+dataframe["H"]/K_X1))
-                 - KX2_factors[minimiser_no+1] * (V0)*(X2/(1+dataframe["H"]/K_X2))
-                 - KX3_factors[minimiser_no+1] * (V0)*(X3/(1+dataframe["H"]/K_X3))
+        model= ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"])
+                 -((self.V0+self.Va)*self.H0)
+                 +(dataframe["m"]*self.C_NaOH)
+                 - BT_factors[minimiser_no+1] * self.V0*(self.BT/(1+dataframe["H"]/dataframe["KB"]))
+                 - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                 - (self.V0)*(self.X1/(1+dataframe["H"]/self.K_X1))
+                 - KX2_factors[minimiser_no+1] * (self.V0)*(self.X2/(1+dataframe["H"]/self.K_X2))
+                 - KX3_factors[minimiser_no+1] * (self.V0)*(self.X3/(1+dataframe["H"]/self.K_X3))
                 )
 
         return model
@@ -556,45 +572,48 @@ class org_alk_titration():
     
     def add_params(self,parameters,minimiser_no):
        if minimiser_no == 1: 
-            parameters.add('H0',    value= self.H0 ) #highest [H+] value used as initial estimate
-            parameters.add('C_NaOH',value= self.C_NaOH, vary = False) 
-            parameters.add('X1',    value= self.X1_init, min = 0)
-            parameters.add('K_X1',  value= self.K_X1_init, min = 0)
-        elif minimiser_no == 2:
-            parameters.add('H0',    value= self.H0, vary=False) #highest [H+] value used as initial estimate
-            parameters.add('C_NaOH',value= self.C_NaOH, vary=False) 
-            parameters.add('X1',    value= self.X1)
-            parameters.add('K_X1',  value= self.K_X1)
-            parameters.add('X2',    value= self.X2_init, min = 0)
-            parameters.add('K_X2',  value= self.K_X2_init, min = 0)
-        elif minimiser_no == 3:
-            parameters.add('H0',    value= self.H0, vary=False) #highest [H+] value used as initial estimate
-            parameters.add('C_NaOH',value= self.C_NaOH, vary=False) 
-            parameters.add('X1',    value= self.X1 , vary=False)
-            parameters.add('K_X1',  value= self.K_X1, vary=False)
-            parameters.add('X2',    value= self.X2)
-            parameters.add('K_X2',  value= self.K_X2)
-            parameters.add('X3',    value= self.X3_init, min = 0)
-            parameters.add('K_X3',  value= self.K_X3_init, min = 0)
-        elif minimiser_no == 4:
-            parameters.add('H0',    value= self.H0, vary=False) #highest [H+] value used as initial estimate
-            parameters.add('C_NaOH',value= self.C_NaOH, vary=False) 
-            parameters.add('X1',    value= self.X1 , vary=False)
-            parameters.add('K_X1',  value= self.K_X1, vary=False)
-            parameters.add('X2',    value= self.X2, vary=False)
-            parameters.add('K_X2',  value= self.K_X2, vary=False)
-            parameters.add('X3',    value= self.X3)
-            parameters.add('K_X3',  value= self.K_X3)
+            parameters.add('H0',    value = self.H0 ) #highest [H+] value used as initial estimate
+            parameters.add('C_NaOH',value = self.C_NaOH, vary = False) 
+            parameters.add('X1',    value = self.X1, min = 0)
+            parameters.add('K_X1',  value = self.K_X1, min = 0)
+       elif minimiser_no == 2:
+            parameters.add('H0',    value = self.H0, vary=False) #highest [H+] value used as initial estimate
+            parameters.add('C_NaOH',value = self.C_NaOH, vary=False) 
+            parameters.add('X1',    value = self.X1)
+            parameters.add('K_X1',  value = self.K_X1)
+            parameters.add('X2',    value = self.X2_init, min = 0)
+            parameters.add('K_X2',  value = self.K_X2_init, min = 0)
+       elif minimiser_no == 3:
+            parameters.add('H0',    value = self.H0, vary=False) #highest [H+] value used as initial estimate
+            parameters.add('C_NaOH',value = self.C_NaOH, vary=False) 
+            parameters.add('X1',    value = self.X1 , vary=False)
+            parameters.add('K_X1',  value = self.K_X1, vary=False)
+            parameters.add('X2',    value = self.X2)
+            parameters.add('K_X2',  value = self.K_X2)
+            parameters.add('X3',    value = self.X3_init, min = 0)
+            parameters.add('K_X3',  value = self.K_X3_init, min = 0)
+       elif minimiser_no == 4:
+            parameters.add('H0',    value = self.H0, vary=False) #highest [H+] value used as initial estimate
+            parameters.add('C_NaOH',value = self.C_NaOH, vary=False) 
+            parameters.add('X1',    value = self.X1 , vary=False)
+            parameters.add('K_X1',  value = self.K_X1, vary=False)
+            parameters.add('X2',    value = self.X2, vary=False)
+            parameters.add('K_X2',  value = self.K_X2, vary=False)
+            parameters.add('X3',    value = self.X3)
+            parameters.add('K_X3',  value = self.K_X3)
 
     def minimise(self,minimiser_no):
-        dataframe = self.cleaned_dataframe
+        if minimiser_no < 3:
+            dataframe = self.cleaned_dataframe
+        elif 2 < minimiser_no < 5:
+            dataframe = self.df_NaOH
+        elif minimiser_no > 4: 
+            raise ValueError("minimiser_no must be in the range 1-4")
 
         if minimiser_no == 1:
             dataframe = dataframe[dataframe["pH"].between(0,5)]
         elif minimiser_no == 2:
             dataframe = dataframe[dataframe["pH"].between(0,6.5)]
-        elif minimiser_no > 4: 
-            raise ValueError("minimiser_no must be in the range 1-4")
 
         x = dataframe["m"]
         data = dataframe["H"]
@@ -608,21 +627,21 @@ class org_alk_titration():
         result = minner.minimize()
 
         if minimiser_no == 1:
-            H0 = result.params.get('H0').value
-            X1 = result.params.get('X1').value
-            K_X1 = result.params.get('K_X1').value
+            self.H0 = result.params.get('H0').value
+            self.X1 = result.params.get('X1').value
+            self.K_X1 = result.params.get('K_X1').value
         elif minimiser_no == 2:
-            X1 = result.params.get('X1').value
-            K_X1 = result.params.get('K_X1').value
-            X2 = result.params.get('X2').value
-            K_X2 = result.params.get('K_X2').value
+            self.X1 = result.params.get('X1').value
+            self.K_X1 = result.params.get('K_X1').value
+            self.X2 = result.params.get('X2').value
+            self.K_X2 = result.params.get('K_X2').value
         elif minimiser_no == 3:
-            H0 = result.params.get('H0').value
-            C_NaOH = result.params.get('C_NaOH').value 
-            X2 = result.params.get('X2').value
-            K_X2 = result.params.get('K_X2').value
-            X3 = result.params.get('X3').value
-            K_X3 = result.params.get('K_X3').value
+            self.H0 = result.params.get('H0').value
+            self.C_NaOH = result.params.get('C_NaOH').value 
+            self.X2 = result.params.get('X2').value
+            self.K_X2 = result.params.get('K_X2').value
+            self.X3 = result.params.get('X3').value
+            self.K_X3 = result.params.get('K_X3').value
         elif minimiser_no == 4:
-            X3 = result.params.get('X3').value
-            K_X3 = result.params.get('K_X3').value
+            self.X3 = result.params.get('X3').value
+            self.K_X3 = result.params.get('K_X3').value
