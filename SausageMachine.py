@@ -541,35 +541,15 @@ class org_alk_titration():
         model= ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"])
                  -((self.V0+self.Va)*self.H0)
                  +(dataframe["m"]*self.C_NaOH)
-                 - BT_factors[minimiser_no+1] * self.V0*(self.BT/(1+dataframe["H"]/dataframe["KB"]))
+                 - BT_factors[minimiser_no-1] * self.V0*(self.BT/(1+dataframe["H"]/dataframe["KB"]))
                  - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                  - (self.V0)*(self.X1/(1+dataframe["H"]/self.K_X1))
-                 - KX2_factors[minimiser_no+1] * (self.V0)*(self.X2/(1+dataframe["H"]/self.K_X2))
-                 - KX3_factors[minimiser_no+1] * (self.V0)*(self.X3/(1+dataframe["H"]/self.K_X3))
+                 - KX2_factors[minimiser_no-1] * (self.V0)*(self.X2/(1+dataframe["H"]/self.K_X2))
+                 - KX3_factors[minimiser_no-1] * (self.V0)*(self.X3/(1+dataframe["H"]/self.K_X3))
                 )
 
         return model
 
-    def fcn2min(self,params,x,data,minimiser_no):
-
-        if minimiser_no < 1 or minimiser_no > 4:
-            raise ValueError("minimiser_no must be in range 1-4")
-
-        H0 = params['H0']
-        C_NaOH = params['C_NaOH']
-        X1 = params['X1']
-        K_X1 = params['K_X1']
-
-        if minimiser_no >= 2 and minimiser_no < 5:
-            X2 = params['X2']
-            K_X2 = params['K_X2']
-        if minimiser_no >= 3 and minimiser_no < 5:
-            X3 = params['X3']
-            K_X3 = params['K_X3']
-        
-        model = self.build_model(minimiser_no)
-        return model - data
-    
     def add_params(self,parameters,minimiser_no):
        if minimiser_no == 1: 
             parameters.add('H0',    value = self.H0 ) #highest [H+] value used as initial estimate
@@ -581,8 +561,8 @@ class org_alk_titration():
             parameters.add('C_NaOH',value = self.C_NaOH, vary=False) 
             parameters.add('X1',    value = self.X1)
             parameters.add('K_X1',  value = self.K_X1)
-            parameters.add('X2',    value = self.X2_init, min = 0)
-            parameters.add('K_X2',  value = self.K_X2_init, min = 0)
+            parameters.add('X2',    value = self.X2, min = 0)
+            parameters.add('K_X2',  value = self.K_X2, min = 0)
        elif minimiser_no == 3:
             parameters.add('H0',    value = self.H0, vary=False) #highest [H+] value used as initial estimate
             parameters.add('C_NaOH',value = self.C_NaOH, vary=False) 
@@ -590,8 +570,8 @@ class org_alk_titration():
             parameters.add('K_X1',  value = self.K_X1, vary=False)
             parameters.add('X2',    value = self.X2)
             parameters.add('K_X2',  value = self.K_X2)
-            parameters.add('X3',    value = self.X3_init, min = 0)
-            parameters.add('K_X3',  value = self.K_X3_init, min = 0)
+            parameters.add('X3',    value = self.X3,min = 0)
+            parameters.add('K_X3',  value = self.K_X3, min = 0)
        elif minimiser_no == 4:
             parameters.add('H0',    value = self.H0, vary=False) #highest [H+] value used as initial estimate
             parameters.add('C_NaOH',value = self.C_NaOH, vary=False) 
@@ -618,12 +598,17 @@ class org_alk_titration():
         x = dataframe["m"]
         data = dataframe["H"]
 
+        model = self.build_model(minimiser_no)
+        def func(params,data,minimiser_no):
+            return model - data
+
         params = Parameters()
         self.add_params(params,minimiser_no)
+        self.params = params
 
-        minner = Minimizer(self.fcn2min(params,x,data,minimiser_no)
-                          ,params, fcn_args=(x, data))
+        minner = Minimizer(func,params,fcn_args=(x, data))
         kws  = {'options': {'maxiter':100}}
+
         result = minner.minimize()
 
         if minimiser_no == 1:
