@@ -501,12 +501,14 @@ class org_alk_titration():
                                     - dataframe['m']*self.C_NaOH
                                    )
 
+        # Move this to a separate function
+
         cleaned_dataframe = dataframe[["H", "OH", "m", "K1", "K2","pK1", "pK2", "pH"
                                       ,"KB",  'CB']].copy()
 
         cleaned_dataframe.dropna(inplace=True)
         cleaned_dataframe.reset_index(inplace=True)
-        self.cleaned_dataframe = cleaned_dataframe
+        self.cleaned_df_NaOH = cleaned_dataframe
 
 
     def init_minimiser(self):
@@ -528,10 +530,10 @@ class org_alk_titration():
         # the start of the minimise function. This should be tidied at some 
         # point
         if minimiser_no == 1:
-            dataframe = self.cleaned_dataframe
+            dataframe = self.cleaned_df_NaOH
             dataframe = dataframe[dataframe["pH"].between(0, 5)]
         elif minimiser_no == 2:
-            dataframe = self.cleaned_dataframe
+            dataframe = self.cleaned_df_NaOH
             dataframe = dataframe[dataframe["pH"].between(0, 6.5)]
         elif minimiser_no == 3 or minimiser_no == 4:
             dataframe = self.df_NaOH
@@ -584,7 +586,7 @@ class org_alk_titration():
 
     def minimise(self,minimiser_no):
         if minimiser_no < 3:
-            dataframe = self.cleaned_dataframe
+            dataframe = self.cleaned_df_NaOH
         elif 2 < minimiser_no < 5:
             dataframe = self.df_NaOH
         elif minimiser_no > 4: 
@@ -607,7 +609,7 @@ class org_alk_titration():
         self.params = params
 
         minner = Minimizer(func,params,fcn_args=(x, data))
-        kws  = {'options': {'maxiter':100}}
+        kws  = {'options': {'maxiter':100}} # Pass this to the minimizer somehow
 
         result = minner.minimize()
 
