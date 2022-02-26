@@ -633,7 +633,7 @@ class org_alk_titration():
             self.X3 = result.params.get('X3').value
             self.K_X3 = result.params.get('K_X3').value
 
-    def write_to_excel(filename, df, sheet_name='Sheet1', startrow=None,
+    def write_to_excel(self, filename,df, sheet_name='Sheet1', startrow=None,
                            truncate_sheet=False, 
                            **to_excel_kwargs):
         """
