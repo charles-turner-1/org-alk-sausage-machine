@@ -13,6 +13,8 @@ organic alkalinity calculations.
 #IMPORT REQUIRED PACKAGES
 #########################
 
+from asyncio import sslproto
+from re import M
 import numpy as np
 import pandas as pd
 import math
@@ -24,6 +26,7 @@ from lmfit import Minimizer, Parameters, report_fit
 from matplotlib.legend_handler import HandlerBase
 from openpyxl import load_workbook
 from IPython.display import Markdown, display
+
 
 class org_alk_titration():
     def __init__(self,dataset_path,spreadsheet_name_TA = None
@@ -372,7 +375,6 @@ class org_alk_titration():
             raise ValueError("Dataframe label not recognised")
 
         new_dataframe = dataframe[dataframe["GRAN_pH"].between(3, 3.5)]#SELECT ONLY TITRATION POINTS WHICH pH ARE BETWEEN 3.0 - 3.5 
-        data_points = len(new_dataframe.index) #CALCULATE NUMBER OF DATA POINTS IN 3-3.5 pH RANGE
 
         # DEFINE FUNCTION WHICH RETURNS VALUE(S) TO BE MINIMISED, IN THIS CASE SSR 
         x = new_dataframe["H"]
@@ -396,16 +398,16 @@ class org_alk_titration():
         minner = Minimizer(fcn2min, params, fcn_args=(x, data))
         kws  = {'options': {'maxiter':10}}
         result = minner.minimize()
-        # calculate final result
-        final = data + result.residual
-
 
         #################################
         #EXTRACT AND PROCESS TA NLSF RESULTS
         #################################
         TA_processed = result.params.get('TA_est_NLSF').value #EXTRACT INTIAL TA VALUE M/KG-1
         TA_final = TA_processed*10**6 #COVERT INTIAL TA VALUE TO µmol/KG-1
-        f = result.params.get('f_NLSF').value #EXTRACT NLSF F VALUE
+        if titration_label == "TA":
+            f = 1
+        else:
+            f = result.params.get('f_NLSF').value  
         E0_processed = E0_init_est + dataframe["K"]*np.log(f) #CALCULATE E0 FROM NLSF F VALUE
         E0_final = E0_processed.mean() #FINAL ESTIMATE OF E0
         new_dataframe["pH"] = -np.log10(np.exp((dataframe["E(V)"]-E0_final)/dataframe["K"])) #CALCULATE pH AT EACH TITRATION POINT FROM E0 FINAL ESTIMATE
@@ -520,38 +522,6 @@ class org_alk_titration():
         self.K_X2 = 10**-5.25 #midpoint pH 3 - 7.5
         self.K_X3 = 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
 
-    def build_model(self,minimiser_no):
-        BT_factors = [0, 0, 0, 0]
-        self.BT = 0 # BT is still uninitialised and is causing type errors
-        KX2_factors = [0, 1, 1, 1]
-        KX3_factors = [0, 0, 1, 1]
-        
-        # This isn't very clean: I've basically done the exact same thing at
-        # the start of the minimise function. This should be tidied at some 
-        # point
-        if minimiser_no == 1:
-            dataframe = self.cleaned_df_NaOH
-            dataframe = dataframe[dataframe["pH"].between(0, 5)]
-        elif minimiser_no == 2:
-            dataframe = self.cleaned_df_NaOH
-            dataframe = dataframe[dataframe["pH"].between(0, 6.5)]
-        elif minimiser_no == 3 or minimiser_no == 4:
-            dataframe = self.df_NaOH
-        else:
-            raise ValueError("minimiser_no must be between 1 and 4")
-
-        model= ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"])
-                 -((self.V0+self.Va)*self.H0)
-                 +(dataframe["m"]*self.C_NaOH)
-                 - BT_factors[minimiser_no-1] * self.V0*(self.BT/(1+dataframe["H"]/dataframe["KB"]))
-                 - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
-                 - (self.V0)*(self.X1/(1+dataframe["H"]/self.K_X1))
-                 - KX2_factors[minimiser_no-1] * (self.V0)*(self.X2/(1+dataframe["H"]/self.K_X2))
-                 - KX3_factors[minimiser_no-1] * (self.V0)*(self.X3/(1+dataframe["H"]/self.K_X3))
-                )
-
-        return model
-
     def add_params(self,parameters,minimiser_no):
        if minimiser_no == 1: 
             parameters.add('H0',    value = self.H0 ) #highest [H+] value used as initial estimate
@@ -584,6 +554,21 @@ class org_alk_titration():
             parameters.add('X3',    value = self.X3)
             parameters.add('K_X3',  value = self.K_X3)
 
+    def get_params(self,result,minimiser_no):
+        if minimiser_no == 1 or minimiser_no == 3:
+            self.H0 = result.params.get('H0').value
+        if minimiser_no == 1 or minimiser_no == 2:
+            self.X1 = result.params.get('X1').value
+            self.K_X1 = result.params.get('K_X1').value
+        if minimiser_no == 2 or minimiser_no == 3:
+            self.X2 = result.params.get('X2').value
+            self.K_X2 = result.params.get('K_X2').value
+        if minimiser_no == 3 or minimiser_no == 4:
+            self.X3 = result.params.get('X3').value
+            self.K_X3 = result.params.get('K_X3').value
+        if minimiser_no == 3:
+            self.C_NaOH = result.params.get('C_NaOH').value
+
     def minimise(self,minimiser_no):
         if minimiser_no < 3:
             dataframe = self.cleaned_df_NaOH
@@ -600,38 +585,188 @@ class org_alk_titration():
         x = dataframe["m"]
         data = dataframe["H"]
 
-        model = self.build_model(minimiser_no)
-        def func(params,data,minimiser_no):
-            return model - data
+        if minimiser_no == 1:
+            def fcn2min(params, x, data):
+                H0 = params['H0']
+                C_NaOH = params['C_NaOH']
+                X1 = params['X1']
+                K_X1 = params['K_X1']
+
+                model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
+                         -((self.V0+self.Va)*H0)
+                         +(dataframe["m"]*C_NaOH) 
+                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1)))
+                # All the inpurts going into this function are exactly the same as in the original
+                # notebook. 
+                return model - data
+        elif minimiser_no == 2:
+            def fcn2min(params, x, data):
+                H0 = params['H0']
+                C_NaOH = params['C_NaOH']
+                X1 = params['X1']
+                K_X1 = params['K_X1']
+                X2 = params['X2']
+                K_X2 = params['K_X2']
+
+                model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
+                         -((self.V0+self.Va)*H0)
+                         +(dataframe["m"]*C_NaOH) 
+                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
+                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2)))
+                return model - data
+        elif minimiser_no == 3:
+            def fcn2min(params, x, data):
+                H0 = params['H0']
+                C_NaOH = params['C_NaOH']
+                X1 = params['X1']
+                K_X1 = params['K_X1']
+                X2 = params['X2']
+                K_X2 = params['K_X2']
+                X3 = params['X3']
+                K_X3 = params['K_X3']
+
+                model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
+                         -((self.V0+self.Va)*H0)
+                         +(dataframe["m"]*C_NaOH) 
+                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
+                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
+                         - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
+                return model - data
+        elif minimiser_no == 4:
+            def fcn2min(params, x, data):
+                H0 = params['H0']
+                C_NaOH = params['C_NaOH']
+                X1 = params['X1']
+                K_X1 = params['K_X1']
+                X2 = params['X2']
+                K_X2 = params['K_X2']
+                X3 = params['X3']
+                K_X3 = params['K_X3']
+    
+                model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
+                         -((self.V0+self.Va)*H0)
+                         +(dataframe["m"]*C_NaOH) 
+                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
+                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
+                         - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
+                return model - data
 
         params = Parameters()
         self.add_params(params,minimiser_no)
-        self.params = params
-
-        minner = Minimizer(func,params,fcn_args=(x, data))
-        kws  = {'options': {'maxiter':100}} # Pass this to the minimizer somehow
+    
+        # do fit, here with leastsq model
+        minner = Minimizer(fcn2min, params, fcn_args=(x, data))
+        kws  = {'options': {'maxiter':100}}
 
         result = minner.minimize()
+        self.get_params(result,minimiser_no)
 
+    def ssr(self,minimiser_no):
+        cleaned_dataframe = self.cleaned_df_NaOH
+        dataframe = self.df_NaOH
         if minimiser_no == 1:
-            self.H0 = result.params.get('H0').value
-            self.X1 = result.params.get('X1').value
-            self.K_X1 = result.params.get('K_X1').value
+            cleaned_dataframe["m_calc_001"] = ((self.CO2*(self.V0)/((cleaned_dataframe["H"]/cleaned_dataframe["K1"])+(cleaned_dataframe["K2"]/cleaned_dataframe["H"])+1) 
+                                              + self.X1*(self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1)
+                                              + self.H0*(self.V0+self.Va)
+                                              - self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"])
+                                              - self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))/(cleaned_dataframe["H"]-cleaned_dataframe["OH"]+self.C_NaOH) )
+            SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_001"])**2)
         elif minimiser_no == 2:
-            self.X1 = result.params.get('X1').value
-            self.K_X1 = result.params.get('K_X1').value
-            self.X2 = result.params.get('X2').value
-            self.K_X2 = result.params.get('K_X2').value
+            cleaned_dataframe["m_calc_002"] = ((self.CO2*(self.V0)/((cleaned_dataframe["H"]/cleaned_dataframe["K1"])+(cleaned_dataframe["K2"]/cleaned_dataframe["H"])+1) 
+                                              + self.X1*(self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1)
+                                              + self.X2*(self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
+                                              + self.H0*(self.V0+self.Va)
+                                              - self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"])
+                                              - self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))/(cleaned_dataframe["H"]-cleaned_dataframe["OH"]+self.C_NaOH) )
+            SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_002"])**2)
         elif minimiser_no == 3:
-            self.H0 = result.params.get('H0').value
-            self.C_NaOH = result.params.get('C_NaOH').value 
-            self.X2 = result.params.get('X2').value
-            self.K_X2 = result.params.get('K_X2').value
-            self.X3 = result.params.get('X3').value
-            self.K_X3 = result.params.get('K_X3').value
+            dataframe["m_calc_003"] = ((self.CO2*(self.V0)/((dataframe["H"]/dataframe["K1"])+(dataframe["K2"]/dataframe["H"])+1) 
+                                      + self.X1*(self.V0)/((dataframe["H"]/self.K_X1)+1)
+                                      + self.X2*(self.V0)/((dataframe["H"]/self.K_X2)+1)
+                                      + self.X3*(self.V0)/((dataframe["H"]/self.K_X3)+1)
+                                      + self.H0*(self.V0+self.Va)
+                                      - self.V0*(dataframe["H"]-dataframe["OH"])
+                                      - self.Va*(dataframe["H"]-dataframe["OH"]))/(dataframe["H"]-dataframe["OH"]+self.C_NaOH) )
+            SSR = np.sum((dataframe['m']-dataframe["m_calc_003"])**2)
         elif minimiser_no == 4:
-            self.X3 = result.params.get('X3').value
-            self.K_X3 = result.params.get('K_X3').value
+            dataframe["m_calc_004"] = ((self.CO2*(self.V0)/((dataframe["H"]/dataframe["K1"])+(dataframe["K2"]/dataframe["H"])+1) 
+                                    + self.X1*(self.V0)/((dataframe["H"]/self.K_X1)+1)
+                                    + self.X2*(self.V0)/((dataframe["H"]/self.K_X2)+1)
+                                    + self.X3*(self.V0)/((dataframe["H"]/self.K_X3)+1)
+                                    + self.H0*(self.V0+self.Va)
+                                    - self.V0*(dataframe["H"]-dataframe["OH"])
+                                    - self.Va*(dataframe["H"]-dataframe["OH"]))/(dataframe["H"]-dataframe["OH"]+self.C_NaOH) )
+            SSR = np.sum((dataframe['m']-dataframe["m_calc_004"])**2)
+        return SSR 
+
+    def repeat_minimise(self,minimiser_no,SSR_frac_change_limit=1e-4,plot_results=True):
+        self.minimise(minimiser_no)
+        SSR_init = self.ssr(minimiser_no)
+        SSR_frac_change = 1
+        num_reps = 0
+        while SSR_frac_change > SSR_frac_change_limit:
+            self.minimise(minimiser_no)
+            SSR = self.ssr(minimiser_no)
+            SSR_frac_change = (((SSR  - SSR_init)/ SSR_init)**2)**0.5
+            SSR_init = SSR
+            num_reps += 1
+        print(f"Minimisation repeated {num_reps} times in order to reach fractional change of {SSR_frac_change_limit} in SSR")
+        print(f"Final SSR value = {SSR:.5f}")
+
+        if plot_results:
+            if minimiser_no == 1:
+                x_meas = self.cleaned_df_NaOH["m"]
+                x_calc = self.cleaned_df_NaOH["m_calc_001"]
+                y_meas = self.cleaned_df_NaOH["pH"]
+                y_calc = self.cleaned_df_NaOH["pH"]
+                print('X1 (initial):', self.X1*10**6, "| pK1(initial): ", -np.log10(self.K_X1), '| H0 :', self.H0 ) 
+            elif minimiser_no == 2:
+                x_meas = self.cleaned_df_NaOH["m"]
+                x_calc = self.cleaned_df_NaOH["m_calc_002"]
+                y_meas = self.cleaned_df_NaOH["pH"]
+                y_calc = self.cleaned_df_NaOH["pH"]
+                print('X1:', self.X1*10**6, "| pK1: ", -np.log10(self.K_X1), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
+            elif minimiser_no == 3:
+                x_meas = self.df_NaOH["m"]
+                x_calc = self.df_NaOH["m_calc_003"]
+                y_meas = self.df_NaOH["pH"]
+                y_calc = self.df_NaOH["pH"]
+                print('X2:', self.X2*10**6, "| pK2: ", -np.log10(self.K_X2), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
+            elif minimiser_no == 4:
+                x_meas = self.df_NaOH["m"]
+                x_calc = self.df_NaOH["m_calc_004"]
+                y_meas = self.df_NaOH["pH"]
+                y_calc = self.df_NaOH["pH"]
+                print('X3:', self.X3*10**6, "| pK3: ", -np.log10(self.K_X3), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
+
+            plt.xlabel('NaOH added (g)', fontsize=18)
+            plt.ylabel('pH', fontsize=16)
+            #plt.axhline(0, color='red', linestyle='--') 
+            #plt.axhline(0, color='red', linestyle='--') 
+            graph = plt.scatter(x_meas, y_meas, c = 'black', marker = "1")
+            graph = plt.plot(x_calc, y_calc, c = 'red')
+            plt.grid(False)
+            ax = plt.gca()
+            ax.tick_params(bottom='on', left='on', labelleft='on', labelbottom='on', length=5, labelsize = 10.5)
+            plt.rc('axes',edgecolor='black')
+            plt.annotate(f"SSR: {SSR:.5f}", xy=(0.0650, 0.75), xycoords='axes fraction')
+
+
+            list_color  = ["black","red",]
+            list_mak    = ["1",       "_"]
+            list_lab    = ['Measured','Calculated',]
+
+            ax.legend(list(zip(list_color,list_mak)), list_lab, 
+                      handler_map={tuple:MarkerHandler()}) 
+
+            plt.show()
+        
+
+
 
     def write_to_excel(self, filename,df, sheet_name='Sheet1', startrow=None,
                            truncate_sheet=False, 
@@ -712,3 +847,23 @@ class org_alk_titration():
 
         # save the workbook
         writer.save()
+
+
+
+        tit.write_to_excel("df_NaOH_output_values.xlsx",tit.df_NaOH, sheet_name='Sheet1')
+
+
+
+
+def truncate(number, digits) -> float:
+    stepper = 10.0 ** digits
+    return math.trunc(stepper * number) / stepper
+
+def printmd(string):
+    display(Markdown(string))
+    
+class MarkerHandler(HandlerBase):
+    def create_artists(self, legend, tup,xdescent, ydescent,
+                        width, height, fontsize,trans):
+        return [plt.Line2D([width/2], [height/2.],ls="",
+                       marker=tup[1],color=tup[0], transform=trans)]
