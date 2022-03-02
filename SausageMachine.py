@@ -852,15 +852,6 @@ class org_alk_titration():
 
         tit.write_to_excel("df_NaOH_output_values.xlsx",tit.df_NaOH, sheet_name='Sheet1')
 
-
-
-
-def truncate(number, digits) -> float:
-    stepper = 10.0 ** digits
-    return math.trunc(stepper * number) / stepper
-
-def printmd(string):
-    display(Markdown(string))
     
 class MarkerHandler(HandlerBase):
     def create_artists(self, legend, tup,xdescent, ydescent,
