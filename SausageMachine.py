@@ -660,7 +660,7 @@ class org_alk_titration():
     
         # do fit, here with leastsq model
         minner = Minimizer(fcn2min, params, fcn_args=(x, data))
-        kws  = {'options': {'maxiter':100}}
+        kws  = {'options': {'maxiter':100}} # Add this to minner at some point
 
         result = minner.minimize()
         self.get_params(result,minimiser_no)
@@ -719,12 +719,16 @@ class org_alk_titration():
 
         if plot_results:
             if minimiser_no == 1:
-                x_meas = self.cleaned_df_NaOH["m"]
-                x_calc = self.cleaned_df_NaOH["m_calc_001"]
-                y_meas = self.cleaned_df_NaOH["pH"]
-                y_calc = self.cleaned_df_NaOH["pH"]
+                dataframe = self.cleaned_df_NaOH
+                dataframe = dataframe[dataframe["pH"].between(0,5)]
+                x_meas = dataframe["m"]
+                x_calc = dataframe["m_calc_001"]
+                y_meas = dataframe["pH"]
+                y_calc = dataframe["pH"]
                 print('X1 (initial):', self.X1*10**6, "| pK1(initial): ", -np.log10(self.K_X1), '| H0 :', self.H0 ) 
             elif minimiser_no == 2:
+                dataframe = self.cleaned_df_NaOH
+                dataframe = dataframe[dataframe["pH"].between(0,6.5)]
                 x_meas = self.cleaned_df_NaOH["m"]
                 x_calc = self.cleaned_df_NaOH["m_calc_002"]
                 y_meas = self.cleaned_df_NaOH["pH"]
