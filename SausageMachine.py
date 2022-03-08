@@ -29,7 +29,7 @@ from IPython.display import Markdown, display
 
 
 class org_alk_titration():
-    def __init__(self,dataset_path,spreadsheet_name_TA = None
+    def __init__(self,dataset_path=None,spreadsheet_name_TA = None
                                   ,spreadsheet_name_NaOH = None
                                   ,spreadsheet_name_BT = None):
         self.dataset_path = dataset_path
@@ -51,9 +51,6 @@ class org_alk_titration():
         self.initial_K_TA = None
         self.initial_K_BT = None
         self.initial_K_NaOh = None
-        self.df_TA = None
-        self.df_NaOH = None
-        self.BT = None
         self.mass_TA_known = False
         self.mass_NaOH_known = False
         self.temp_TA_known = False
@@ -108,18 +105,18 @@ class org_alk_titration():
 
 
 
-    def extract_TA_data(self,start_idx=0,end_idx=9):
+    def extract_TA_data(self,g_start_idx=0,g_end_idx=9):
         # This should take the spreadsheet Dan gave me and save these data to 
         # the class instance. I've looked at it doesn't appear like the 
         # different titration classes can be all used as the same function.
 
         df_TA = self.df_TA
 
-        self.V0 = df_TA.iloc[start_idx]['g_0']-df_TA.iloc[start_idx]['g_1'] # Sample mass (g)
-        self.S_TA = df_TA.iloc[start_idx]['SALINITY']  # Sample Salinity 
-        self.sample_id_TA = df_TA.iloc[start_idx]['SAMPLE']  # Sample ID
-        self.data_start_TA = int(df_TA.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
-        self.initial_EV_TA = df_TA.iloc[end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
+        self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
+        self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
+        self.sample_id_TA = df_TA.iloc[g_start_idx]['SAMPLE']  # Sample ID
+        self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
+        self.initial_EV_TA = df_TA.iloc[g_end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
 
     def extract_NaOH_data(self):
         kelvin_offset = 273.15
@@ -560,14 +557,23 @@ class org_alk_titration():
         if minimiser_no == 1 or minimiser_no == 2:
             self.X1 = result.params.get('X1').value
             self.K_X1 = result.params.get('K_X1').value
+            pK1 = -np.log10(self.K_X1)
         if minimiser_no == 2 or minimiser_no == 3:
             self.X2 = result.params.get('X2').value
             self.K_X2 = result.params.get('K_X2').value
+            pK2 = -np.log10(self.K_X2)
         if minimiser_no == 3 or minimiser_no == 4:
             self.X3 = result.params.get('X3').value
             self.K_X3 = result.params.get('K_X3').value
+            pK3 = -np.log10(self.K_X3)
         if minimiser_no == 3:
             self.C_NaOH = result.params.get('C_NaOH').value
+        
+        # Check the pK values are within the range of pH values for the NaOH titration
+        # Throw a warning if not
+
+        # Check that X1+X2+X3 are sensible (NB if pK[i] is dodgy X[i] is probably dodgy)
+
 
     def minimise(self,minimiser_no):
         if minimiser_no < 3:
@@ -580,7 +586,9 @@ class org_alk_titration():
         if minimiser_no == 1:
             dataframe = dataframe[dataframe["pH"].between(0,5)]
         elif minimiser_no == 2:
-            dataframe = dataframe[dataframe["pH"].between(0,6.5)]
+            max_pH = dataframe["pH"].max()*0.8
+            # Check max pH is greater than 5
+            dataframe = dataframe[dataframe["pH"].between(0,max_pH)]
 
         x = dataframe["m"]
         data = dataframe["H"]
@@ -709,6 +717,8 @@ class org_alk_titration():
         SSR_frac_change = 1
         num_reps = 0
         while SSR_frac_change > SSR_frac_change_limit:
+            if num_reps > 100:
+                raise Exception("This doesn't look like its going to work after 100 repetitions")
             self.minimise(minimiser_no)
             SSR = self.ssr(minimiser_no)
             SSR_frac_change = (((SSR  - SSR_init)/ SSR_init)**2)**0.5
@@ -728,7 +738,8 @@ class org_alk_titration():
                 print('X1 (initial):', self.X1*10**6, "| pK1(initial): ", -np.log10(self.K_X1), '| H0 :', self.H0 ) 
             elif minimiser_no == 2:
                 dataframe = self.cleaned_df_NaOH
-                dataframe = dataframe[dataframe["pH"].between(0,6.5)]
+                max_pH = dataframe["pH"].max()*0.8
+                dataframe = dataframe[dataframe["pH"].between(0,max_pH)]
                 x_meas = self.cleaned_df_NaOH["m"]
                 x_calc = self.cleaned_df_NaOH["m_calc_002"]
                 y_meas = self.cleaned_df_NaOH["pH"]
