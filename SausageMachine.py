@@ -72,18 +72,31 @@ class org_alk_titration():
             "slope_rho" : -0.0008958,
             "intercept_rho" : 1.02119193,
             "df_T_label" : "Acid_T",   
-            "mass_known" : False
+            "mass_known" : False,
+            "TA_est" : None,
+            "E0_init_est" : None,
+            "initial_EV" : None,
+            "initial_K" : None,
+            "titration_soln" : Cl_HCl,
         },
         "NaOH" : {
             "slope_rho" : -0.014702658,
             "intercept_rho" : 1.27068345,
             "df_T_label" : "NaOH_T",
-            "mass_known" : False
+            "mass_known" : False,
+            "TA_est" : None,
+            "E0_init_est" : None,
+            "initial_EV" : None,
+            "initial_K" : None,
+            "titration_soln" : I_NaOH,
         },
         "BT" : {
             "slope_rho" : -0.0008958,
             "intercept_rho" : 1.02119193,
-            "df_T_label" : "Acid_T"
+            "df_T_label" : "Acid_T",
+            "initial_EV" : None,
+            "initial_K" : None,
+            "titration_soln" : Cl_HCl,
         }
     }
 
@@ -123,8 +136,6 @@ class org_alk_titration():
         self.df_BT = pd.read_excel(BT_filename_full)
 
 
-
-
     def extract_TA_data(self,g_start_idx=0,g_end_idx=9):
         # This should take the spreadsheet Dan gave me and save these data to 
         # the class instance. I've looked at it doesn't appear like the 
@@ -136,7 +147,7 @@ class org_alk_titration():
         self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
         self.sample_id_TA = df_TA.iloc[g_start_idx]['SAMPLE']  # Sample ID
         self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
-        self.initial_EV_TA = df_TA.iloc[g_end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
+        self.titration_features["TA"]["initial_EV"] = df_TA.iloc[g_end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
 
     def extract_NaOH_data(self):
         kelvin_offset = 273.15
@@ -183,18 +194,13 @@ class org_alk_titration():
         
         self.write_dataframe(stripped_dataframe,titration_label)
 
-
-    def density_curve_info(self,titration_label):
-        slope_rho = self.titration_features[titration_label]["slope_rho"]
-        intercept_rho = self.titration_features[titration_label]["intercept_rho"]
-        return slope_rho, intercept_rho
-
     def vol_to_mass(self,titration_label,initial_mL=0):
 
         if self.temp_TA_known == False:
             raise AssertionError("NaOH temperature not known. Run extract NaOH data first.")
 
-        slope_rho, intercept_rho = self.density_curve_info(titration_label)
+        slope_rho = self.titration_features[titration_label]["slope_rho"]
+        intercept_rho = self.titration_features[titration_label]["intercept_rho"]
 
         dataframe = self.read_dataframe(titration_label)
         df_T_label = self.titration_features[titration_label]["df_T_label"]
@@ -232,62 +238,44 @@ class org_alk_titration():
         dataframe["K"] = (self.R*dataframe['T'])/self.F # Nernst factor 
         initial_K = dataframe.iloc[9]['K'] # Initial Nernst factor, used to calculate initial pH
 
-        if titration_label == "TA":
-            self.initial_K_TA = initial_K
-        elif titration_label == "NaOH":
-            self.initial_K_NaOH = initial_K
-        elif titration_label == "BT":
-            self.initial_K_BT = initial_K
-            self.initial_EV_BT = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
+        self.titration_features[titration_label]["initial_K"] = initial_K
 
+        if titration_label == "BT":
+            self.titration_features[titration_label]["initial_EV"] = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
         self.write_dataframe(dataframe,titration_label)
 
 
     def ion_strength_salinity(self,titration_label):
 
+        dataframe = self.read_dataframe(titration_label)
+        titration_soln = self.titration_features[titration_label]["titration_soln"]
         if titration_label == "TA":
-            dataframe = self.df_TA
             S = self.S_TA
             V0 = self.V0
-            titration_soln = self.Cl_HCl 
         elif titration_label == "NaOH":
-            dataframe = self.df_NaOH
             df_TA = self.df_TA
             S = df_TA['S'][df_TA.index[-1]]
             V0 = self.V0 + self.Va 
-            titration_soln = self.I_NaOH 
         elif titration_label == "BT":
-            dataframe = self.df_BT
             df_NaOH = self.df_NaOH
             S = df_NaOH['S'][df_NaOH.index[-1]] # This is giving NaN. I suspect all problems stem from ehre=
             V0 = self.V0_BT
-            titration_soln = self.Cl_HCl 
 
         ImO = (19.924*S/(1000-1.005*S))
 
         dataframe['ImO'] = (ImO*V0 + dataframe['m']*titration_soln)/(V0 + dataframe['m']) 
         dataframe['S'] = (1000*dataframe['ImO']) / (19.924 + 1.005*dataframe['ImO'])
 
-        if titration_label == "TA":
-            self.df_TA = dataframe
-        elif titration_label == "NaOH":
-            self.df_NaOH = dataframe
-        elif titration_label == "BT":
-            self.df_BT = dataframe
+        self.write_dataframe(dataframe,titration_label)
 
     def equilibrium_consts_sulfate_HF(self,titration_label):
         # Needs to be done after calculating ionic strength and salinity (same 
         # for TA and BT (similar has to be done for NaOH titration, bells &
         # whistles))
-        if titration_label == "TA":
-            dataframe = self.df_TA
-        elif titration_label == "BT":
-            dataframe = self.df_BT
-        elif titration_label == "NaOH":
+        dataframe = self.read_dataframe(titration_label)
+        if titration_label == "NaOH":
             # Piss off this bridge when we get to it
-            x = 0
-        else:
-            raise ValueError("Dataframe label not recognised")
+            raise ValueError("We haven't implemented anything proper here yet")
 
 
         dataframe['K_S'] = np.exp(-4276.1/dataframe['T'] + 141.328 
@@ -305,18 +293,14 @@ class org_alk_titration():
         dataframe['F_T'] = (0.000067/18.998)*(dataframe['S']/1.80655) # Total Hydrogen Fluoride concentration F_T from Riley 1996
         dataframe["Z"] = (1+dataframe['S_T']/dataframe['K_S']) #from dickson 2007 Z = (1+S_T/K_S)
 
-        if titration_label == "TA":
-            self.df_TA = dataframe
-        elif titration_label == "BT":
-            self.df_BT = dataframe
+        self.write_dataframe(dataframe,titration_label)
 
     def gran_func(self,titration_label):
 
+        dataframe = self.read_dataframe(titration_label)
         if titration_label == "TA":
-            dataframe = self.df_TA
             V0 = self.V0
         elif titration_label == "BT":
-            dataframe = self.df_BT
             V0 = self.V0_BT
         else:
             raise ValueError("Dataframe label not recognised")
@@ -332,30 +316,20 @@ class org_alk_titration():
         dataframe["H"] = (np.exp((dataframe["E(V)"]-E0_init_est)/(dataframe["K"]))) #USING EO INITIAL ESTIMATE CALCULATE [H'] FOR EACH TITRATION POINT
         dataframe["GRAN_pH"] = -(np.log10(np.exp((dataframe["E(V)"]-E0_init_est)/dataframe["K"])))#CALCULATE GRAN pH
 
-        if titration_label == "TA":
-            self.df_TA = dataframe
-            self.TA_est_TA = TA_est
-            self.E0_init_est_TA = E0_init_est
-        elif titration_label == "BT":
-            self.df_BT = dataframe
-            self.TA_est_BT = TA_est
-            self.E0_init_est_BT = E0_init_est
+        self.titration_features[titration_label]["TA_est"]= TA_est
+        self.titration_features[titration_label]["E0_init_est"]= E0_init_est
+        self.write_dataframe(dataframe,titration_label)
 
     def nl_least_squares(self,titration_label):
 
+        dataframe = self.read_dataframe(titration_label)
+        E0_init_est = self.titration_features[titration_label]["E0_init_est"]
+        TA_est = self.titration_features[titration_label]["TA_est"]
+        initial_EV = self.titration_features[titration_label]["initial_EV"]
+        initial_K = self.titration_features[titration_label]["initial_K"]
         if titration_label == "TA":
-            dataframe = self.df_TA
-            E0_init_est = self.E0_init_est_TA
-            initial_EV = self.initial_EV_TA
-            TA_est = self.TA_est_TA
-            initial_K = self.initial_K_TA
             V0 = self.V0
         elif titration_label == "BT":
-            dataframe = self.df_BT
-            E0_init_est = self.E0_init_est_BT
-            initial_EV = self.initial_EV_BT
-            TA_est = self.TA_est_BT
-            initial_K = self.initial_K_BT
             V0 = self.V0_BT
         else:
             raise ValueError("Dataframe label not recognised")
