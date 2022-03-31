@@ -39,32 +39,11 @@ class org_alk_titration():
         self.df_TA = None
         self.df_NaOH = None
         self.df_BT = None
-        self.V0 = None
-        self.Va = None
-        self.Vb = None
-        self.V0_BT = None
-        self.S_TA = None
-        self.sample_id_TA = None
-        self.data_start_TA = None
-        self.initial_EV_TA = None
-        self.initial_EV_BT = None
-        self.initial_K_TA = None
-        self.initial_K_BT = None
-        self.initial_K_NaOh = None
-        self.mass_TA_known = False
-        self.mass_NaOH_known = False
+        self.titration_features["TA"]["mass_known"] = False
+        self.titration_features["NaOH"]["mass_known"] = False
         self.temp_TA_known = False
-        self.TA_est_TA = None
-        self.TA_est_BT = None
         self.E0_init_est_TA = None
         self.E0_init_est_BT = None
-        self.H0 = None
-        self.E0_final_TA = None
-        self.E0_final_BT = None
-        self.TA_final_TA = None
-        self.TA_final_BT = None
-        self.TA_processed_TA = None
-        self.TA_processed_BT = None
 
 
 
@@ -87,6 +66,47 @@ class org_alk_titration():
     ###################
     C_NaOH = 0.082744091 # ± 0.000226775 determimed from acidic gran function of standardisation of NaOH using crm standardised HCl
     I_NaOH = 0.082744091 #ionic strength of NaOH
+
+    titration_features = {
+        "TA" : {
+            "slope_rho" : -0.0008958,
+            "intercept_rho" : 1.02119193,
+            "df_T_label" : "Acid_T",   
+            "mass_known" : False
+        },
+        "NaOH" : {
+            "slope_rho" : -0.014702658,
+            "intercept_rho" : 1.27068345,
+            "df_T_label" : "NaOH_T",
+            "mass_known" : False
+        },
+        "BT" : {
+            "slope_rho" : -0.0008958,
+            "intercept_rho" : 1.02119193,
+            "df_T_label" : "Acid_T"
+        }
+    }
+
+    def read_dataframe(self,titration_label):
+        if titration_label == "TA":
+            dataframe = self.df_TA
+        elif titration_label == "NaOH":
+            dataframe = self.df_NaOH
+        elif titration_label == "BT":
+            dataframe = self.df_BT
+        else:
+            raise ValueError("Dataframe label not recognised")
+        return dataframe
+
+    def write_dataframe(self,dataframe,titration_label):
+        if titration_label == "TA":
+            self.df_TA = dataframe
+        elif titration_label == "NaOH":
+            self.df_NaOH = dataframe
+        elif titration_label == "BT":
+            self.df_BT = dataframe
+        else:
+            raise ValueError("Dataframe label not recognised")
 
     def read_excel_spreadsheets(self,TA_filename
                                ,NaOH_filename
@@ -126,9 +146,9 @@ class org_alk_titration():
 
     def extract_BT_data(self,start_idx=0):
 
-        if self.mass_TA_known == False:
+        if self.titration_features["TA"]["mass_known"] == False:
             raise AssertionError("Total Alkalinity mass must be known. Run convert_vol_to_mass on TA data first")
-        if self.mass_NaOH_known == False:
+        if self.titration_features["NaOH"]["mass_known"] == False:
             raise AssertionError("NaOH mass must be known. Run convert_vol_to_mass on NaOH data first")
 
         df_TA = self.df_TA
@@ -143,15 +163,11 @@ class org_alk_titration():
     def strip_data(self,titration_label,start_idx=0,data_start=41):
         # Data start being 41 makes no sense and needs to be cleaned up into 
         # something (more?) sensible
-        if titration_label == "TA":
-            dataframe = self.df_TA
-        elif titration_label == "NaOH":
-            dataframe = self.df_NaOH
-        elif titration_label == "BT":
-            dataframe = self.df_BT
+
+        dataframe = self.read_dataframe(titration_label)
+
+        if titration_label == "BT":
             data_start = self.data_start_BT
-        else:
-            raise ValueError("Dataframe label not recognised")
 
         dataframe['E(V)'] = dataframe.drop(dataframe.index[start_idx:data_start]
                                           ,axis=0)['102 Voltage (V)']
@@ -164,24 +180,13 @@ class org_alk_titration():
         dataframe['Acid_T'] = dataframe['Acid_T'].shift(-(data_start))
         stripped_dataframe = dataframe[['E(V)', 'Sample_T', 'Acid_T', "mL"]].copy() #copy above variables to new "stripped_df"
         stripped_dataframe = stripped_dataframe.dropna() #remove NaN values from stripped_df
-
-        if titration_label == "TA":
-            self.df_TA = stripped_dataframe
-        elif titration_label == "NaOH":
-            self.df_NaOH = stripped_dataframe
-        elif titration_label == "BT":
-            self.df_BT = stripped_dataframe
+        
+        self.write_dataframe(stripped_dataframe,titration_label)
 
 
     def density_curve_info(self,titration_label):
-        if titration_label == "NaOH":
-            slope_rho = -0.014702658
-            intercept_rho = 1.27068345
-        elif titration_label == "TA" or titration_label == "BT":
-            slope_rho = -0.0008958
-            intercept_rho = 1.02119193
-        else:
-            raise ValueError("Titration label not recognised")
+        slope_rho = self.titration_features[titration_label]["slope_rho"]
+        intercept_rho = self.titration_features[titration_label]["intercept_rho"]
         return slope_rho, intercept_rho
 
     def vol_to_mass(self,titration_label,initial_mL=0):
@@ -191,20 +196,15 @@ class org_alk_titration():
 
         slope_rho, intercept_rho = self.density_curve_info(titration_label)
 
+        dataframe = self.read_dataframe(titration_label)
+        df_T_label = self.titration_features[titration_label]["df_T_label"]
+
         if titration_label == "TA":
-            dataframe = self.df_TA
-            df_T_label = "Acid_T"   
             initial_mL = dataframe.iloc[0]["mL"] 
         elif titration_label == "NaOH":
-            dataframe = self.df_NaOH
-            df_T_label = "NaOH_T"
             initial_mL = 0
         elif titration_label == "BT":
-            dataframe = self.df_BT
-            df_T_label = "Acid_T"
             initial_mL = dataframe.iloc[0]["mL"]
-        else:
-            raise ValueError("Dataframe label not recognised")
 
         dataframe["rho"] = (dataframe[df_T_label]*slope_rho+intercept_rho) # Density of titrant g.cm-3 
 
@@ -216,42 +216,31 @@ class org_alk_titration():
         dataframe['delta_g'] = dataframe['delta_g'].fillna(0)
         dataframe['m'] = initial_g+np.cumsum(dataframe['delta_g'])#calculate cumulative total of mass of base/acid added, (initial mass of acid added + increment mass 1,  initial mass of acid added + increment mass 1 + increment mass 2 ...)
 
+        self.titration_features[titration_label]["mass_known"] = True
         if titration_label == "TA":
-            self.df_TA = dataframe
-            self.mass_TA_known = True
             self.Va = dataframe['m'][dataframe.index[-1]]
         elif titration_label == "NaOH":
-            self.df_NaOH = dataframe
             self.Vb = dataframe['m'][dataframe.index[-1]]
-            self.mass_NaOH_known = True
-        elif titration_label == "BT":
-            self.df_BT = dataframe
+
+        self.write_dataframe(dataframe,titration_label)
 
     def nernst_factor(self,titration_label):
 
-        if titration_label == "TA":
-            dataframe = self.df_TA
-        elif titration_label == "NaOH":
-            dataframe = self.df_NaOH
-        elif titration_label == "BT":
-            dataframe = self.df_BT
-        else:
-            raise ValueError("Dataframe label not recognised")
+        dataframe = self.read_dataframe(titration_label)
 
         dataframe["T"] = (dataframe["Sample_T"]+273.15)  # CREATE COLUMN SAMPLE TEMPERATURE (KELVIN) AT EACH TITRATION POINT
         dataframe["K"] = (self.R*dataframe['T'])/self.F # Nernst factor 
         initial_K = dataframe.iloc[9]['K'] # Initial Nernst factor, used to calculate initial pH
 
         if titration_label == "TA":
-            self.df_TA = dataframe
             self.initial_K_TA = initial_K
         elif titration_label == "NaOH":
-            self.df_NaOH = dataframe
             self.initial_K_NaOH = initial_K
         elif titration_label == "BT":
-            self.df_BT = dataframe
             self.initial_K_BT = initial_K
             self.initial_EV_BT = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
+
+        self.write_dataframe(dataframe,titration_label)
 
 
     def ion_strength_salinity(self,titration_label):
@@ -587,8 +576,10 @@ class org_alk_titration():
             dataframe = dataframe[dataframe["pH"].between(0,5)]
         elif minimiser_no == 2:
             max_pH = dataframe["pH"].max()*0.8
-            # Check max pH is greater than 5
+            if max_pH < 5:
+                raise ValueError("Max pH must be greater than 5")
             dataframe = dataframe[dataframe["pH"].between(0,max_pH)]
+
 
         x = dataframe["m"]
         data = dataframe["H"]
