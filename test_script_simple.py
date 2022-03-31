@@ -34,5 +34,8 @@ tit_simple.init_minimiser()
 tit_simple.dissociation_consts()
 
 k = tit_simple.minimise_01()
+k = tit_simple.minimise_02()
+k = tit_simple.minimise_02()
+k = tit_simple.minimise_01()
 
 # So where the fuck is the error coming from?
