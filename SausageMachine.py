@@ -78,6 +78,9 @@ class org_alk_titration():
             "initial_EV" : None,
             "initial_K" : None,
             "titration_soln" : Cl_HCl,
+            "E0_final" : None,
+            "TA_final" : None,
+            "TA_processed" : None,
         },
         "NaOH" : {
             "slope_rho" : -0.014702658,
@@ -97,6 +100,9 @@ class org_alk_titration():
             "initial_EV" : None,
             "initial_K" : None,
             "titration_soln" : Cl_HCl,
+            "E0_final" : None,
+            "TA_final" : None,
+            "TA_processed" : None,
         }
     }
 
@@ -205,15 +211,9 @@ class org_alk_titration():
         dataframe = self.read_dataframe(titration_label)
         df_T_label = self.titration_features[titration_label]["df_T_label"]
 
-        if titration_label == "TA":
-            initial_mL = dataframe.iloc[0]["mL"] 
-        elif titration_label == "NaOH":
-            initial_mL = 0
-        elif titration_label == "BT":
-            initial_mL = dataframe.iloc[0]["mL"]
+        initial_mL = 0 if titration_label == "NaOH" else dataframe.iloc[0]["mL"] 
 
         dataframe["rho"] = (dataframe[df_T_label]*slope_rho+intercept_rho) # Density of titrant g.cm-3 
-
 
         initial_g = initial_mL*dataframe.iloc[0]["rho"]#convert inital volume of base/acid added to mass value (g)
         dataframe['delta_mL'] = dataframe['mL'].diff() #calculate the incremental values of volume of base/acid added
@@ -249,16 +249,15 @@ class org_alk_titration():
 
         dataframe = self.read_dataframe(titration_label)
         titration_soln = self.titration_features[titration_label]["titration_soln"]
+
+        df2 = self.df_TA if titration_label == "NaOH" else self.df_NaOH
+        S = self.S_TA if titration_label == "TA" else df2['S'][df2.index[-1]]
+
         if titration_label == "TA":
-            S = self.S_TA
             V0 = self.V0
         elif titration_label == "NaOH":
-            df_TA = self.df_TA
-            S = df_TA['S'][df_TA.index[-1]]
             V0 = self.V0 + self.Va 
         elif titration_label == "BT":
-            df_NaOH = self.df_NaOH
-            S = df_NaOH['S'][df_NaOH.index[-1]] # This is giving NaN. I suspect all problems stem from ehre=
             V0 = self.V0_BT
 
         ImO = (19.924*S/(1000-1.005*S))
@@ -364,31 +363,23 @@ class org_alk_titration():
         #################################
         TA_processed = result.params.get('TA_est_NLSF').value #EXTRACT INTIAL TA VALUE M/KG-1
         TA_final = TA_processed*10**6 #COVERT INTIAL TA VALUE TO µmol/KG-1
-        if titration_label == "TA":
-            f = 1
-        else:
-            f = result.params.get('f_NLSF').value  
+        f = 1 if titration_label == "TA" else result.params.get('f_NLSF').value  
+
         E0_processed = E0_init_est + dataframe["K"]*np.log(f) #CALCULATE E0 FROM NLSF F VALUE
         E0_final = E0_processed.mean() #FINAL ESTIMATE OF E0
-        new_dataframe["pH"] = -np.log10(np.exp((dataframe["E(V)"]-E0_final)/dataframe["K"])) #CALCULATE pH AT EACH TITRATION POINT FROM E0 FINAL ESTIMATE
-        initial_pH = -np.log10(np.exp((initial_EV-E0_final)/initial_K)) #CALCULATE INTIAL pH FROM E0 FINAL ESTIMATE
 
-        if titration_label == "TA":
-            self.E0_final_TA = E0_final
-            self.TA_final_TA = TA_final
-            self.TA_processed_TA = TA_processed
-        elif titration_label == "BT":
-            self.E0_final_BT = E0_final
-            self.TA_final_BT = TA_final
-            self.TA_processed_BT = TA_processed
+        self.titration_features[titration_label]["E0_final"] = E0_final
+        self.titration_features[titration_label]["TA_final"] = TA_final
+        self.titration_features[titration_label]["TA_processed"] = TA_processed
 
         print(titration_label,": ", TA_final, 'µmol.kg-1')
 
     def pH_H_OH_H0_conc(self):
         dataframe = self.df_NaOH
+        E0 = self.titration_features["TA"]["E0_final"]
 
         dataframe["K"] = (self.R*dataframe["T"])/self.F #Get K value at eachpoint during NaOH titration
-        dataframe["pH"] = -np.log10(np.exp((dataframe["102 Voltage (V)"]-self.E0_final_TA)/dataframe["K"]))#Using EO estimated from TA NLSF procedure calculate pH at each point during NaOH titration
+        dataframe["pH"] = -np.log10(np.exp((dataframe["102 Voltage (V)"]-E0)/dataframe["K"]))#Using EO estimated from TA NLSF procedure calculate pH at each point during NaOH titration
         dataframe["H"] = 10**-(dataframe["pH"]) #Using pH calculate [H+] at each titration point
         dataframe['pKw'] = (-np.log10(np.exp(148.9652-13847.26/dataframe["T"] -
                            23.6521*np.log(dataframe["T"])+(-5.977+118.67/dataframe["T"] + 
@@ -396,7 +387,7 @@ class org_alk_titration():
         dataframe['OH'] = (10**-dataframe["pKw"])/dataframe["H"] #using Acid dissociation constant of Water and [H+] calculate [OH-]
         initial_EV_NaOH = dataframe.iloc[0]['102 Voltage (V)'] #Proton concentration prior to NaOH addition, H0, defined as [H+] at end of first (TA) titration (start of NaOH titration)
         initial_K_NaOH = dataframe.iloc[0]['K']
-        self.H0 = (np.exp((initial_EV_NaOH-self.E0_final_TA)/(initial_K_NaOH)))
+        self.H0 = (np.exp((initial_EV_NaOH-E0)/(initial_K_NaOH)))
 
 
     def pipeline(self):
@@ -455,18 +446,8 @@ class org_alk_titration():
         Xi = 1*10**-6 #SIMULATED value
         Ki = 10**-4.5 #SIMULATED value
 
-        dataframe['CB'] = (self.V0*(Xi/(1+dataframe["H"]/Ki))
-                                    + self.V0*(self.Boron/(1+dataframe["H"]/dataframe["KB"]))
-                                    + self.V0*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"])) 
-                                    - (self.V0 + self.Va + dataframe['m'])*(dataframe["H"]-dataframe["OH"]) 
-                                    + (self.V0 + self.Va)*self.H0
-                                    - dataframe['m']*self.C_NaOH
-                                   )
-
-        # Move this to a separate function
-
-        cleaned_dataframe = dataframe[["H", "OH", "m", "K1", "K2","pK1", "pK2", "pH"
-                                      ,"KB",  'CB']].copy()
+        cleaned_dataframe = dataframe[["H", "OH", "m", "K1", "K2","pK1", "pK2",
+                                       "pH" ,"KB"]].copy()
 
         cleaned_dataframe.dropna(inplace=True)
         cleaned_dataframe.reset_index(inplace=True)
@@ -474,9 +455,9 @@ class org_alk_titration():
 
 
     def init_minimiser(self):
-        self.X1 = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
-        self.X2 = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
-        self.X3 = self.TA_processed_BT #inital Xi = OrgAlk µmol.kg
+        self.X1 = self.titration_features["BT"]["TA_processed"]
+        self.X2 = self.titration_features["BT"]["TA_processed"]
+        self.X3 = self.titration_features["BT"]["TA_processed"]
 
         self.K_X1 = 10**-4.5 #midpoint pH 3 - 7
         self.K_X2 = 10**-5.25 #midpoint pH 3 - 7.5
