@@ -106,6 +106,32 @@ class org_alk_titration():
         }
     }
 
+    equilibrium_constants = {
+        "K_X1" : 10**-4.5,  # 10**-4.5 #midpoint pH 3 - 7,
+        "K_X2" : 10**-5.25, # 10**-5.25 #midpoint pH 3 - 7.55,
+        "K_X3" : 10**-5.5   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
+    }
+
+    def read_master_spreadsheet(self,master_spreadsheet_path
+                               ,master_spreadsheet_filename):
+
+        MS_filename_full = os.path.join(master_spreadsheet_path,master_spreadsheet_filename)
+        self.DF_MASTER = pd.read_excel(MS_filename_full)
+
+    def read_excel_spreadsheets(self,TA_filename
+                               ,NaOH_filename
+                               ,BT_filename):
+        # This function will read in the excel spreadsheets to memory
+        # containing the organic alkalinity titration
+
+        TA_filename_full = os.path.join(self.dataset_path,TA_filename)
+        NaOH_filename_full = os.path.join(self.dataset_path,NaOH_filename)
+        BT_filename_full = os.path.join(self.dataset_path,BT_filename)
+
+        self.df_TA = pd.read_excel(TA_filename_full)
+        self.df_NaOH = pd.read_excel(NaOH_filename_full)
+        self.df_BT = pd.read_excel(BT_filename_full)
+
     def read_dataframe(self,titration_label):
         if titration_label == "TA":
             dataframe = self.df_TA
@@ -127,21 +153,6 @@ class org_alk_titration():
         else:
             raise ValueError("Dataframe label not recognised")
 
-    def read_excel_spreadsheets(self,TA_filename
-                               ,NaOH_filename
-                               ,BT_filename):
-        # This function will read in the excel spreadsheets to memory
-        # containing the organic alkalinity titration
-
-        TA_filename_full = os.path.join(self.dataset_path,TA_filename)
-        NaOH_filename_full = os.path.join(self.dataset_path,NaOH_filename)
-        BT_filename_full = os.path.join(self.dataset_path,BT_filename)
-
-        self.df_TA = pd.read_excel(TA_filename_full)
-        self.df_NaOH = pd.read_excel(NaOH_filename_full)
-        self.df_BT = pd.read_excel(BT_filename_full)
-
-
     def extract_TA_data(self,g_start_idx=0,g_end_idx=9):
         # This should take the spreadsheet Dan gave me and save these data to 
         # the class instance. I've looked at it doesn't appear like the 
@@ -151,7 +162,6 @@ class org_alk_titration():
 
         self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
         self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
-        self.sample_id_TA = df_TA.iloc[g_start_idx]['SAMPLE']  # Sample ID
         self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
         self.titration_features["TA"]["initial_EV"] = df_TA.iloc[g_end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
 
@@ -174,7 +184,6 @@ class org_alk_titration():
         self.Va = df_TA['m'][df_TA.index[-1]] #DEFINE TOTAL MASS OF ACID ADDED DURING FIRST (TA) TITRATION
         self.Vb = df_NaOH['m'][df_NaOH.index[-1]] #DEFINE TOTAL MASS OF BASE ADDED DURING NAOH TITRATION
         self.V0_BT = (self.V0+self.Va+self.Vb) # Sample mass accounting for additions of acid and base (g) 
-        self.sample_id_BT = self.df_BT.iloc[start_idx]['SAMPLE']  # Sample ID
         self.data_start_BT = int(self.df_BT.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
 
     def strip_data(self,titration_label,start_idx=0,data_start=41):
@@ -324,8 +333,6 @@ class org_alk_titration():
         dataframe = self.read_dataframe(titration_label)
         E0_init_est = self.titration_features[titration_label]["E0_init_est"]
         TA_est = self.titration_features[titration_label]["TA_est"]
-        initial_EV = self.titration_features[titration_label]["initial_EV"]
-        initial_K = self.titration_features[titration_label]["initial_K"]
         if titration_label == "TA":
             V0 = self.V0
         elif titration_label == "BT":
@@ -416,15 +423,15 @@ class org_alk_titration():
         self.nl_least_squares("BT")
 
 
-    def dissociation_consts(self,constants="Lueker",Boron=False,CO2=False):
+    def dissociation_consts(self,carbonate_constants="Lueker",Boron=False,CO2=False):
         dataframe = self.df_NaOH
 
-        if constants == "Lueker":
+        if carbonate_constants == "Lueker":
             dataframe["pK1"] = 3633.86/dataframe["T"] - 61.2172 +9.67770*np.log(dataframe["T"]) - 0.011555*dataframe["S"] + 0.0001152*dataframe["S"]**2 
             dataframe["pK2"] = 471.78/dataframe["T"] + 25.9290 - 3.16967*np.log(dataframe["T"]) - 0.01781*dataframe["S"] + 0.0001122*dataframe["S"]**2 
             dataframe["K1"] = 10**-dataframe["pK1"] 
             dataframe["K2"] = 10**-dataframe["pK2"]
-        elif constants == "Mehrbach":
+        elif carbonate_constants == "Mehrbach":
             dataframe["pK1"] = -13.7201+0.031334*dataframe["T"] + 3235.76/dataframe["T"] + (1.300*10**-5)*dataframe["S"]*dataframe["T"] - 0.1032*dataframe["S"]**0.5
             dataframe["pK2"] = 5371.9645+1.671221*dataframe["T"]+0.22913*dataframe["S"]+18.3802*np.log10(dataframe["S"])-128375.28/dataframe["T"]-2194.3055*np.log10(dataframe["T"])-(8.0944*10**-4)*dataframe["S"]*dataframe["T"]-5617.11*np.log10(dataframe["S"])/dataframe["T"] + 2.136*dataframe["S"]/dataframe["T"]
             dataframe["K1"] = 10**-dataframe["pK1"] 
@@ -443,9 +450,6 @@ class org_alk_titration():
         # Since Boron and CO2 are both false by default, I'm pretty sure that this should make sure they don't contribute 
         # unless specified.
 
-        Xi = 1*10**-6 #SIMULATED value
-        Ki = 10**-4.5 #SIMULATED value
-
         cleaned_dataframe = dataframe[["H", "OH", "m", "K1", "K2","pK1", "pK2",
                                        "pH" ,"KB"]].copy()
 
@@ -459,9 +463,9 @@ class org_alk_titration():
         self.X2 = self.titration_features["BT"]["TA_processed"]
         self.X3 = self.titration_features["BT"]["TA_processed"]
 
-        self.K_X1 = 10**-4.5 #midpoint pH 3 - 7
-        self.K_X2 = 10**-5.25 #midpoint pH 3 - 7.5
-        self.K_X3 = 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
+        self.K_X1 = self.equilibrium_constants["K_X1"]
+        self.K_X2 = self.equilibrium_constants["K_X2"]
+        self.K_X3 = self.equilibrium_constants["K_X3"]
 
     def add_params(self,parameters,minimiser_no):
        if minimiser_no == 1: 
@@ -533,6 +537,7 @@ class org_alk_titration():
             max_pH = dataframe["pH"].max()*0.8
             if max_pH < 5:
                 raise ValueError("Max pH must be greater than 5")
+            self.max_pH = max_pH
             dataframe = dataframe[dataframe["pH"].between(0,max_pH)]
 
 
@@ -673,41 +678,31 @@ class org_alk_titration():
         print(f"Minimisation repeated {num_reps} times in order to reach fractional change of {SSR_frac_change_limit} in SSR")
         print(f"Final SSR value = {SSR:.5f}")
 
+        m_calc_labels = ["m_calc_001","m_calc_002","m_calc_003","m_calc_004"]
+
         if plot_results:
+            dataframe = self.cleaned_df_NaOH if minimiser_no < 3 else self.df_NaOH
+
             if minimiser_no == 1:
-                dataframe = self.cleaned_df_NaOH
                 dataframe = dataframe[dataframe["pH"].between(0,5)]
-                x_meas = dataframe["m"]
-                x_calc = dataframe["m_calc_001"]
-                y_meas = dataframe["pH"]
-                y_calc = dataframe["pH"]
+            elif minimiser_no == 2:
+                dataframe = dataframe[dataframe["pH"].between(0,self.max_pH)]
+
+            x_meas = dataframe["m"]
+            x_calc = dataframe[m_calc_labels[minimiser_no-1]]
+            y_meas = dataframe["pH"]
+            y_calc = dataframe["pH"]
+
+            if minimiser_no == 1:
                 print('X1 (initial):', self.X1*10**6, "| pK1(initial): ", -np.log10(self.K_X1), '| H0 :', self.H0 ) 
             elif minimiser_no == 2:
-                dataframe = self.cleaned_df_NaOH
-                max_pH = dataframe["pH"].max()*0.8
-                dataframe = dataframe[dataframe["pH"].between(0,max_pH)]
-                x_meas = self.cleaned_df_NaOH["m"]
-                x_calc = self.cleaned_df_NaOH["m_calc_002"]
-                y_meas = self.cleaned_df_NaOH["pH"]
-                y_calc = self.cleaned_df_NaOH["pH"]
                 print('X1:', self.X1*10**6, "| pK1: ", -np.log10(self.K_X1), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
             elif minimiser_no == 3:
-                x_meas = self.df_NaOH["m"]
-                x_calc = self.df_NaOH["m_calc_003"]
-                y_meas = self.df_NaOH["pH"]
-                y_calc = self.df_NaOH["pH"]
                 print('X2:', self.X2*10**6, "| pK2: ", -np.log10(self.K_X2), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
             elif minimiser_no == 4:
-                x_meas = self.df_NaOH["m"]
-                x_calc = self.df_NaOH["m_calc_004"]
-                y_meas = self.df_NaOH["pH"]
-                y_calc = self.df_NaOH["pH"]
                 print('X3:', self.X3*10**6, "| pK3: ", -np.log10(self.K_X3), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
 
             plt.xlabel('NaOH added (g)', fontsize=18)
-            plt.ylabel('pH', fontsize=16)
-            #plt.axhline(0, color='red', linestyle='--') 
-            #plt.axhline(0, color='red', linestyle='--') 
             graph = plt.scatter(x_meas, y_meas, c = 'black', marker = "1")
             graph = plt.plot(x_calc, y_calc, c = 'red')
             plt.grid(False)
