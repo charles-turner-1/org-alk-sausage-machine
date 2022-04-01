@@ -32,6 +32,7 @@ class org_alk_titration():
         self.spreadsheet_name_TA = spreadsheet_name_TA
         self.spreadsheet_name_NaOH = spreadsheet_name_NaOH
         self.spreadsheet_name_BT = spreadsheet_name_BT
+        self.S_TA = None
         self.df_TA = None
         self.df_NaOH = None
         self.df_BT = None
@@ -119,6 +120,8 @@ class org_alk_titration():
         self.BT_filename = DF_MASTER['SAMPLE'][TA_IDX+2].item()
         self.DF_MASTER = DF_MASTER # Might be uneccesary to keep this
 
+        self.S_TA = DF_MASTER['SALINITY'][TA_IDX].item()
+
     def read_excel_spreadsheets(self,TA_filename=None
                                ,NaOH_filename=None
                                ,BT_filename=None):
@@ -173,7 +176,8 @@ class org_alk_titration():
 
         df_TA = self.df_TA
         self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
-        self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
+        if self.S_TA is None:
+            self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
         self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
         self.titration_features["TA"]["initial_EV"] = df_TA.iloc[g_end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
 
