@@ -10,6 +10,7 @@ organic alkalinity calculations.
 """
 
 from asyncio import sslproto
+from multiprocessing.sharedctypes import Value
 from re import M
 import numpy as np
 import pandas as pd
@@ -33,6 +34,7 @@ class org_alk_titration():
         self.spreadsheet_name_NaOH = spreadsheet_name_NaOH
         self.spreadsheet_name_BT = spreadsheet_name_BT
         self.S_TA = None
+        self.V0 = None
         self.df_TA = None
         self.df_NaOH = None
         self.df_BT = None
@@ -121,6 +123,17 @@ class org_alk_titration():
         self.DF_MASTER = DF_MASTER # Might be uneccesary to keep this
 
         self.S_TA = DF_MASTER['SALINITY'][TA_IDX].item()
+        self.V0 = DF_MASTER['g_0'][TA_IDX].item() - DF_MASTER['g_1'][TA_IDX].item()
+
+        self.titration_features["NaOH"]["slope_rho"] = DF_MASTER['slope_NaOH'][TA_IDX].item()
+        self.titration_features["NaOH"]["intercept_rho"] = DF_MASTER['intercept_NaOH'][TA_IDX].item()
+
+        self.titration_features["TA"]["slope_rho"] = DF_MASTER['slope_HCl'][TA_IDX].item()
+        self.titration_features["TA"]["intercept_rho"] = DF_MASTER['intercept_HCl'][TA_IDX].item()
+
+        self.titration_features["BT"]["slope_rho"] = self.titration_features["BT"]["slope_rho"] 
+        self.titration_features["BT"]["intercept_rho"] = self.titration_features["BT"]["intercept_rho"] 
+
 
     def read_excel_spreadsheets(self,TA_filename=None
                                ,NaOH_filename=None
@@ -175,7 +188,8 @@ class org_alk_titration():
         # different titration classes can be all used as the same function.
 
         df_TA = self.df_TA
-        self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
+        if self.V0 is None:
+            self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
         if self.S_TA is None:
             self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
         self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
@@ -331,6 +345,8 @@ class org_alk_titration():
 
         dataframe["F1"] = ((V0+dataframe["m"])*np.exp((dataframe["E(V)"]/(dataframe['K'])))) #Calculate Gran Function F1 at each titration point
         dataframe = dataframe[dataframe["F1"].between(10000, 1000000)] #drop all gran funciton values less than 10000 as these are TYPICALLY non linear with respect to m
+        if len(dataframe.index) < 1:
+            raise ValueError("No points to be fit after removing nonlinear points\nSee gran_func")
         slope, intercept, r_value, p_value, std_err =linregress(dataframe["m"], dataframe["F1"])#CALL SLOPE AND INTERCEPT OF Gran function F1
         equivalence_point = -intercept/slope #Calculate equivalence point estimate (g) from Gran function F1
         TA_est = (equivalence_point*self.C_HCl)/V0 #Estimate TA using equivalence point estimate
