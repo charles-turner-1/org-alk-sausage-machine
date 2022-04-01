@@ -97,6 +97,13 @@ class org_alk_titration():
         "carbonate" : "Lueker"
     }
 
+    species_concentrations = {
+        "BT" : 0.0004157,
+        "SiT" : 0,
+        "PT" : 0,
+        "CTNa" : 14.999,
+    }
+
     def set_concentrations(self,C_HCl  = 0.10060392
                                ,C_NaOH = 0.082744091
                                ,Cl_HCl = 0.10060392
@@ -136,7 +143,8 @@ class org_alk_titration():
         self.titration_features["OA"]["intercept_rho"] = self.titration_features["OA"]["intercept_rho"] 
 
         self.equilibrium_constants["carbonate"] = DF_MASTER['carbonate_K'][TA_IDX].item()
-        self.CTNa = DF_MASTER['CTNa'][TA_IDX].item()
+
+        self.species_concentrations['CTNa'] = DF_MASTER['CTNa'][TA_IDX].item()
 
 
 
@@ -464,7 +472,7 @@ class org_alk_titration():
         self.dissociation_consts()
 
 
-    def dissociation_consts(self,carbonate_constants=None,inc_Boron=False,inc_CTNa=False):
+    def dissociation_consts(self,carbonate_constants=None,inc_Boron=True,inc_CTNa=False):
         dataframe = self.df_NaOH
         if carbonate_constants is None:
             carbonate_constants = self.equilibrium_constants["carbonate"]
@@ -489,13 +497,17 @@ class org_alk_titration():
                           + (148.0248 + 137.1942*dataframe["S"]**0.5 + 1.62142*dataframe["S"])
                           + (-24.4344-25.085*dataframe["S"]**0.5 - 0.2474*dataframe["S"])
                           *np.log(dataframe["T"])+ (0.053105*dataframe["S"]**0.5)*dataframe["T"] )
-        self.Boron = inc_Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
-        self.CTNa *= inc_CTNa *(self.Vb/1000)
+
+        self.species_concentrations['BT'] = inc_Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
+        self.species_concentrations['CTNa'] *= inc_CTNa *(self.Vb/1000)
         # Since Boron and CO2 are both false by default, I'm pretty sure that this should make sure they don't contribute 
         # unless specified.
 
+        dataframe['KP2'] = -8814.715/dataframe['T'] + 172.0883 - 27.927*np.log(dataframe['T']) + (-160.34/dataframe['T'] + 1.3566)*dataframe['S']**0.5 + (0.37335/dataframe['T'] - 0.05778)*dataframe['S'] 
+        dataframe['KSi'] = -8904.2/dataframe['T'] + 117.385 - 19.334*np.log(dataframe['T']) +(-458.79/dataframe['T'] + 3.5913)*(dataframe['ImO'])**0.5 + (188.74/dataframe['T'] - 1.5998)*(dataframe['ImO']) + (-12.1652/dataframe['T'] + 0.07871)*(dataframe['ImO'])**2 + np.log(1-0.001005*dataframe['S'])
+
         cleaned_dataframe = dataframe[["H", "OH", "m", "K1", "K2","pK1", "pK2",
-                                       "pH" ,"KB"]].copy()
+                                       "pH" ,"KB","KP2","KSi"]].copy()
 
         cleaned_dataframe.dropna(inplace=True)
         cleaned_dataframe.reset_index(inplace=True)
@@ -512,7 +524,7 @@ class org_alk_titration():
         self.K_X3 = self.equilibrium_constants["K_X3"]
 
     def add_params(self,parameters,minimiser_no):
-       parameters.add('CTNa',value=self.CTNa)
+       parameters.add('CTNa',value=self.species_concentrations['CTNa'])
        if minimiser_no == 1: 
             parameters.add('H0',    value = self.H0 ) #highest [H+] value used as initial estimate
             parameters.add('C_NaOH',value = self.C_NaOH, vary = False) 
@@ -569,6 +581,9 @@ class org_alk_titration():
 
 
     def minimise(self,minimiser_no):
+
+        CTNa = self.species_concentrations["CTNa"]
+
         if minimiser_no < 3:
             dataframe = self.cleaned_df_NaOH
         elif 2 < minimiser_no < 5:
@@ -599,7 +614,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1)))
                 # All the inpurts going into this function are exactly the same as in the original
                 # notebook. 
@@ -616,7 +631,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                          - (self.V0)*(X2/(1+dataframe["H"]/K_X2)))
                 return model - data
@@ -634,7 +649,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                          - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
                          - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
@@ -653,7 +668,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                          - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
                          - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
@@ -672,17 +687,21 @@ class org_alk_titration():
     def ssr(self,minimiser_no):
         # Where do self.SiT, self.BT, self.PT come from?
         cleaned_dataframe = self.cleaned_df_NaOH
+        BT = self.species_concentrations["BT"]
+        PT = self.species_concentrations["PT"]
+        SiT = self.species_concentrations["SiT"]
+        CTNa = self.species_concentrations["CTNa"]
         dataframe = self.df_NaOH
         if minimiser_no == 1:
             cleaned_dataframe["m_calc_001"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
-                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
-                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
-                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
                                       - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
                                       + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
-                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
-                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      / ((2*CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_001"])**2)
@@ -690,14 +709,14 @@ class org_alk_titration():
         elif minimiser_no == 2:
             cleaned_dataframe["m_calc_002"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
-                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
-                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
-                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
                                       - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
                                       - (self.X2*self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
                                       + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
-                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
-                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      / ((2*CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_002"])**2)
@@ -705,15 +724,15 @@ class org_alk_titration():
         elif minimiser_no == 3:
             cleaned_dataframe["m_calc_003"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
-                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
-                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
-                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
                                       - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
                                       - (self.X2*self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
                                       - (self.X3*self.V0)/((cleaned_dataframe["H"]/self.K_X3)+1)
                                       + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
-                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
-                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      / ((2*CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_003"])**2)
@@ -722,15 +741,15 @@ class org_alk_titration():
         elif minimiser_no == 4:
             cleaned_dataframe["m_calc_004"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
-                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
-                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
-                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
                                       - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
                                       - (self.X2*self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
                                       - (self.X3*self.V0)/((cleaned_dataframe["H"]/self.K_X3)+1)
                                       + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
-                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
-                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      / ((2*CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_004"])**2)
