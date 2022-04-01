@@ -93,7 +93,8 @@ class org_alk_titration():
     equilibrium_constants = {
         "K_X1" : 10**-4.5,  # 10**-4.5 #midpoint pH 3 - 7,
         "K_X2" : 10**-5.25, # 10**-5.25 #midpoint pH 3 - 7.55,
-        "K_X3" : 10**-5.5   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
+        "K_X3" : 10**-5.5,   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
+        "carbonate" : "Lueker"
     }
 
     def set_concentrations(self,C_HCl  = 0.10060392
@@ -133,6 +134,10 @@ class org_alk_titration():
 
         self.titration_features["BT"]["slope_rho"] = self.titration_features["BT"]["slope_rho"] 
         self.titration_features["BT"]["intercept_rho"] = self.titration_features["BT"]["intercept_rho"] 
+
+        self.equilibrium_constants["carbonate"] = DF_MASTER['carbonate_K'][TA_IDX].item()
+
+
 
 
     def read_excel_spreadsheets(self,TA_filename=None
@@ -456,8 +461,10 @@ class org_alk_titration():
         self.nl_least_squares("BT")
 
 
-    def dissociation_consts(self,carbonate_constants="Lueker",Boron=False,CO2=False):
+    def dissociation_consts(self,carbonate_constants=None,Boron=False,CO2=False):
         dataframe = self.df_NaOH
+        if carbonate_constants is None:
+            carbonate_constants = self.equilibrium_constants["carbonate"]
 
         if carbonate_constants == "Lueker":
             dataframe["pK1"] = 3633.86/dataframe["T"] - 61.2172 +9.67770*np.log(dataframe["T"]) - 0.011555*dataframe["S"] + 0.0001152*dataframe["S"]**2 
