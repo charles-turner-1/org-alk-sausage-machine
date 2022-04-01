@@ -112,23 +112,30 @@ class org_alk_titration():
 
         MS_filename_full = os.path.join(master_spreadsheet_path,master_spreadsheet_filename)
         DF_MASTER = pd.read_excel(MS_filename_full)
-        self.TA_idx = [DF_MASTER['SAMPLE'] == TA_titration_filename].iloc[0]
         self.TA_filename = DF_MASTER[DF_MASTER['SAMPLE'] == TA_titration_filename].iloc[0]['SAMPLE']
-        print(self.TA_filename)
-        # TA_idx = DF_MASTER[DF_MASTER['SAMPLE']].index()
 
+        TA_IDX = DF_MASTER[DF_MASTER['SAMPLE']==self.TA_filename].index.values
+        self.NaOH_filename = DF_MASTER['SAMPLE'][TA_IDX+1].item()
+        self.BT_filename = DF_MASTER['SAMPLE'][TA_IDX+2].item()
+        self.DF_MASTER = DF_MASTER # Might be uneccesary to keep this
 
-        # TA_titration = find(self.DF_MASTER['SAMPLE'] == "01.09.21.50UM.001_PROCESSED.xlsx") # 10
-        # NaOH_titration = TA_titration + 1
-        # BT_titration = TA_titration + 2
-
-        self.DF_MASTER = DF_MASTER
-
-    def read_excel_spreadsheets(self,TA_filename
-                               ,NaOH_filename
-                               ,BT_filename):
+    def read_excel_spreadsheets(self,TA_filename=None
+                               ,NaOH_filename=None
+                               ,BT_filename=None):
         # This function will read in the excel spreadsheets to memory
         # containing the organic alkalinity titration
+        if TA_filename is None:
+            TA_filename = self.TA_filename
+        else:
+            self.TA_filename = TA_filename
+        if NaOH_filename is None:
+            NaOH_filename = self.NaOH_filename
+        else:
+            self.NaOH_filename = NaOH_filename
+        if BT_filename is None:
+            BT_filename = self.BT_filename
+        else:
+            self.BT_filename = BT_filename
 
         TA_filename_full = os.path.join(self.dataset_path,TA_filename)
         NaOH_filename_full = os.path.join(self.dataset_path,NaOH_filename)
