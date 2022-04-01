@@ -28,21 +28,21 @@ from IPython.display import Markdown, display
 class org_alk_titration():
     def __init__(self,dataset_path=None,spreadsheet_name_TA = None
                                   ,spreadsheet_name_NaOH = None
-                                  ,spreadsheet_name_BT = None):
+                                  ,spreadsheet_name_OA = None):
         self.dataset_path = dataset_path
         self.spreadsheet_name_TA = spreadsheet_name_TA
         self.spreadsheet_name_NaOH = spreadsheet_name_NaOH
-        self.spreadsheet_name_BT = spreadsheet_name_BT
+        self.spreadsheet_name_OA = spreadsheet_name_OA
         self.S_TA = None
         self.V0 = None
         self.df_TA = None
         self.df_NaOH = None
-        self.df_BT = None
+        self.df_OA = None
         self.titration_features["TA"]["mass_known"] = False
         self.titration_features["NaOH"]["mass_known"] = False
         self.temp_TA_known = False
         self.E0_init_est_TA = None
-        self.E0_init_est_BT = None
+        self.E0_init_est_OA = None
     ########################################################
     #CONSTANTS CALCULATED BASED ON SALINITY AND TEMPERATURE#
     ########################################################
@@ -77,7 +77,7 @@ class org_alk_titration():
             "initial_K" : None,
             "titration_soln" : None,
         },
-        "BT" : {
+        "OA" : {
             "slope_rho" : -0.0008958,
             "intercept_rho" : 1.02119193,
             "df_T_label" : "Acid_T",
@@ -107,7 +107,7 @@ class org_alk_titration():
         self.I_NaOH = I_NaOH
         self.titration_features["TA"]["titration_soln"] = Cl_HCl
         self.titration_features["NaOH"]["titration_soln"] = I_NaOH
-        self.titration_features["BT"]["titration_soln"] = Cl_HCl
+        self.titration_features["OA"]["titration_soln"] = Cl_HCl
 
 
     def read_master_spreadsheet(self,master_spreadsheet_path
@@ -120,7 +120,7 @@ class org_alk_titration():
 
         TA_IDX = DF_MASTER[DF_MASTER['SAMPLE']==self.TA_filename].index.values
         self.NaOH_filename = DF_MASTER['SAMPLE'][TA_IDX+1].item()
-        self.BT_filename = DF_MASTER['SAMPLE'][TA_IDX+2].item()
+        self.OA_filename = DF_MASTER['SAMPLE'][TA_IDX+2].item()
         self.DF_MASTER = DF_MASTER # Might be uneccesary to keep this
 
         self.S_TA = DF_MASTER['SALINITY'][TA_IDX].item()
@@ -132,17 +132,18 @@ class org_alk_titration():
         self.titration_features["TA"]["slope_rho"] = DF_MASTER['slope_HCl'][TA_IDX].item()
         self.titration_features["TA"]["intercept_rho"] = DF_MASTER['intercept_HCl'][TA_IDX].item()
 
-        self.titration_features["BT"]["slope_rho"] = self.titration_features["BT"]["slope_rho"] 
-        self.titration_features["BT"]["intercept_rho"] = self.titration_features["BT"]["intercept_rho"] 
+        self.titration_features["OA"]["slope_rho"] = self.titration_features["OA"]["slope_rho"] 
+        self.titration_features["OA"]["intercept_rho"] = self.titration_features["OA"]["intercept_rho"] 
 
         self.equilibrium_constants["carbonate"] = DF_MASTER['carbonate_K'][TA_IDX].item()
+        self.CTNa = DF_MASTER['CTNa'][TA_IDX].item()
 
 
 
 
     def read_excel_spreadsheets(self,TA_filename=None
                                ,NaOH_filename=None
-                               ,BT_filename=None):
+                               ,OA_filename=None):
         # This function will read in the excel spreadsheets to memory
         # containing the organic alkalinity titration
         if TA_filename is None:
@@ -153,26 +154,26 @@ class org_alk_titration():
             NaOH_filename = self.NaOH_filename
         else:
             self.NaOH_filename = NaOH_filename
-        if BT_filename is None:
-            BT_filename = self.BT_filename
+        if OA_filename is None:
+            OA_filename = self.OA_filename
         else:
-            self.BT_filename = BT_filename
+            self.OA_filename = OA_filename
 
         TA_filename_full = os.path.join(self.dataset_path,TA_filename)
         NaOH_filename_full = os.path.join(self.dataset_path,NaOH_filename)
-        BT_filename_full = os.path.join(self.dataset_path,BT_filename)
+        OA_filename_full = os.path.join(self.dataset_path,OA_filename)
 
         self.df_TA = pd.read_excel(TA_filename_full)
         self.df_NaOH = pd.read_excel(NaOH_filename_full)
-        self.df_BT = pd.read_excel(BT_filename_full)
+        self.df_OA = pd.read_excel(OA_filename_full)
 
     def read_dataframe(self,titration_label):
         if titration_label == "TA":
             dataframe = self.df_TA
         elif titration_label == "NaOH":
             dataframe = self.df_NaOH
-        elif titration_label == "BT":
-            dataframe = self.df_BT
+        elif titration_label == "OA":
+            dataframe = self.df_OA
         else:
             raise ValueError("Dataframe label not recognised")
         return dataframe
@@ -182,8 +183,8 @@ class org_alk_titration():
             self.df_TA = dataframe
         elif titration_label == "NaOH":
             self.df_NaOH = dataframe
-        elif titration_label == "BT":
-            self.df_BT = dataframe
+        elif titration_label == "OA":
+            self.df_OA = dataframe
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -206,7 +207,7 @@ class org_alk_titration():
         self.df_NaOH["NaOH_T"] = self.df_NaOH["NaOH Temperature (°C)"] #create colume for temperature (Degrees Celsius) of NaOH upon addition to cell 
         self.temp_TA_known = True 
 
-    def extract_BT_data(self,start_idx=0):
+    def extract_OA_data(self,start_idx=0):
 
         if self.titration_features["TA"]["mass_known"] == False:
             raise AssertionError("Total Alkalinity mass must be known. Run convert_vol_to_mass on TA data first")
@@ -218,8 +219,8 @@ class org_alk_titration():
 
         self.Va = df_TA['m'][df_TA.index[-1]] #DEFINE TOTAL MASS OF ACID ADDED DURING FIRST (TA) TITRATION
         self.Vb = df_NaOH['m'][df_NaOH.index[-1]] #DEFINE TOTAL MASS OF BASE ADDED DURING NAOH TITRATION
-        self.V0_BT = (self.V0+self.Va+self.Vb) # Sample mass accounting for additions of acid and base (g) 
-        self.data_start_BT = int(self.df_BT.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
+        self.V0_OA = (self.V0+self.Va+self.Vb) # Sample mass accounting for additions of acid and base (g) 
+        self.data_start_OA = int(self.df_OA.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
 
     def strip_data(self,titration_label,start_idx=0,data_start=41):
         # Data start being 41 makes no sense and needs to be cleaned up into 
@@ -227,8 +228,8 @@ class org_alk_titration():
 
         dataframe = self.read_dataframe(titration_label)
 
-        if titration_label == "BT":
-            data_start = self.data_start_BT
+        if titration_label == "OA":
+            data_start = self.data_start_OA
 
         dataframe['E(V)'] = dataframe.drop(dataframe.index[start_idx:data_start]
                                           ,axis=0)['102 Voltage (V)']
@@ -284,7 +285,7 @@ class org_alk_titration():
 
         self.titration_features[titration_label]["initial_K"] = initial_K
 
-        if titration_label == "BT":
+        if titration_label == "OA":
             self.titration_features[titration_label]["initial_EV"] = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
         self.write_dataframe(dataframe,titration_label)
 
@@ -301,8 +302,8 @@ class org_alk_titration():
             V0 = self.V0
         elif titration_label == "NaOH":
             V0 = self.V0 + self.Va 
-        elif titration_label == "BT":
-            V0 = self.V0_BT
+        elif titration_label == "OA":
+            V0 = self.V0_OA
 
         ImO = (19.924*S/(1000-1.005*S))
 
@@ -313,7 +314,7 @@ class org_alk_titration():
 
     def equilibrium_consts_sulfate_HF(self,titration_label):
         # Needs to be done after calculating ionic strength and salinity (same 
-        # for TA and BT (similar has to be done for NaOH titration, bells &
+        # for TA and OA (similar has to be done for NaOH titration, bells &
         # whistles))
         dataframe = self.read_dataframe(titration_label)
         if titration_label == "NaOH":
@@ -343,8 +344,8 @@ class org_alk_titration():
         dataframe = self.read_dataframe(titration_label)
         if titration_label == "TA":
             V0 = self.V0
-        elif titration_label == "BT":
-            V0 = self.V0_BT
+        elif titration_label == "OA":
+            V0 = self.V0_OA
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -372,8 +373,8 @@ class org_alk_titration():
         TA_est = self.titration_features[titration_label]["TA_est"]
         if titration_label == "TA":
             V0 = self.V0
-        elif titration_label == "BT":
-            V0 = self.V0_BT
+        elif titration_label == "OA":
+            V0 = self.V0_OA
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -451,20 +452,23 @@ class org_alk_titration():
         self.ion_strength_salinity("NaOH")
         self.pH_H_OH_H0_conc()
 
-        self.extract_BT_data()
-        self.strip_data("BT")
-        self.vol_to_mass("BT")
-        self.nernst_factor("BT")
-        self.ion_strength_salinity("BT")
-        self.equilibrium_consts_sulfate_HF("BT")
-        self.gran_func("BT")
-        self.nl_least_squares("BT")
+        self.extract_OA_data()
+        self.strip_data("OA")
+        self.vol_to_mass("OA")
+        self.nernst_factor("OA")
+        self.ion_strength_salinity("OA")
+        self.equilibrium_consts_sulfate_HF("OA")
+        self.gran_func("OA")
+        self.nl_least_squares("OA")
+        self.init_minimiser()
+        self.dissociation_consts()
 
 
-    def dissociation_consts(self,carbonate_constants=None,Boron=False,CO2=False):
+    def dissociation_consts(self,carbonate_constants=None,inc_Boron=False,inc_CTNa=False):
         dataframe = self.df_NaOH
         if carbonate_constants is None:
             carbonate_constants = self.equilibrium_constants["carbonate"]
+        self.vary_CTNA = inc_CTNa
 
         if carbonate_constants == "Lueker":
             dataframe["pK1"] = 3633.86/dataframe["T"] - 61.2172 +9.67770*np.log(dataframe["T"]) - 0.011555*dataframe["S"] + 0.0001152*dataframe["S"]**2 
@@ -485,8 +489,8 @@ class org_alk_titration():
                           + (148.0248 + 137.1942*dataframe["S"]**0.5 + 1.62142*dataframe["S"])
                           + (-24.4344-25.085*dataframe["S"]**0.5 - 0.2474*dataframe["S"])
                           *np.log(dataframe["T"])+ (0.053105*dataframe["S"]**0.5)*dataframe["T"] )
-        self.Boron = Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
-        self.CO2 = CO2 * 14.9935212785335*(self.Vb/1000)
+        self.Boron = inc_Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
+        self.CTNa *= inc_CTNa *(self.Vb/1000)
         # Since Boron and CO2 are both false by default, I'm pretty sure that this should make sure they don't contribute 
         # unless specified.
 
@@ -499,15 +503,16 @@ class org_alk_titration():
 
 
     def init_minimiser(self):
-        self.X1 = self.titration_features["BT"]["TA_processed"]
-        self.X2 = self.titration_features["BT"]["TA_processed"]
-        self.X3 = self.titration_features["BT"]["TA_processed"]
+        self.X1 = self.titration_features["OA"]["TA_processed"]
+        self.X2 = self.titration_features["OA"]["TA_processed"]
+        self.X3 = self.titration_features["OA"]["TA_processed"]
 
         self.K_X1 = self.equilibrium_constants["K_X1"]
         self.K_X2 = self.equilibrium_constants["K_X2"]
         self.K_X3 = self.equilibrium_constants["K_X3"]
 
     def add_params(self,parameters,minimiser_no):
+       parameters.add('CTNa',value=self.CTNa)
        if minimiser_no == 1: 
             parameters.add('H0',    value = self.H0 ) #highest [H+] value used as initial estimate
             parameters.add('C_NaOH',value = self.C_NaOH, vary = False) 
@@ -594,7 +599,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1)))
                 # All the inpurts going into this function are exactly the same as in the original
                 # notebook. 
@@ -611,7 +616,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                          - (self.V0)*(X2/(1+dataframe["H"]/K_X2)))
                 return model - data
@@ -629,7 +634,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                          - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
                          - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
@@ -648,7 +653,7 @@ class org_alk_titration():
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
                          -((self.V0+self.Va)*H0)
                          +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(self.CO2/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
+                         - (self.V0)*(self.CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
                          - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                          - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
                          - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
@@ -663,43 +668,72 @@ class org_alk_titration():
 
         result = minner.minimize()
         self.get_params(result,minimiser_no)
-
+    
     def ssr(self,minimiser_no):
+        # Where do self.SiT, self.BT, self.PT come from?
         cleaned_dataframe = self.cleaned_df_NaOH
         dataframe = self.df_NaOH
         if minimiser_no == 1:
-            cleaned_dataframe["m_calc_001"] = ((self.CO2*(self.V0)/((cleaned_dataframe["H"]/cleaned_dataframe["K1"])+(cleaned_dataframe["K2"]/cleaned_dataframe["H"])+1) 
-                                              + self.X1*(self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1)
-                                              + self.H0*(self.V0+self.Va)
-                                              - self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"])
-                                              - self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))/(cleaned_dataframe["H"]-cleaned_dataframe["OH"]+self.C_NaOH) )
+            cleaned_dataframe["m_calc_001"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
+                                      - self.H0*(self.V0+self.Va)
+                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
+                                      + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
+                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
+                                     
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_001"])**2)
+
         elif minimiser_no == 2:
-            cleaned_dataframe["m_calc_002"] = ((self.CO2*(self.V0)/((cleaned_dataframe["H"]/cleaned_dataframe["K1"])+(cleaned_dataframe["K2"]/cleaned_dataframe["H"])+1) 
-                                              + self.X1*(self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1)
-                                              + self.X2*(self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
-                                              + self.H0*(self.V0+self.Va)
-                                              - self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"])
-                                              - self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))/(cleaned_dataframe["H"]-cleaned_dataframe["OH"]+self.C_NaOH) )
+            cleaned_dataframe["m_calc_002"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
+                                      - self.H0*(self.V0+self.Va)
+                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
+                                      - (self.X2*self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
+                                      + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
+                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
+                                     
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_002"])**2)
+
         elif minimiser_no == 3:
-            dataframe["m_calc_003"] = ((self.CO2*(self.V0)/((dataframe["H"]/dataframe["K1"])+(dataframe["K2"]/dataframe["H"])+1) 
-                                      + self.X1*(self.V0)/((dataframe["H"]/self.K_X1)+1)
-                                      + self.X2*(self.V0)/((dataframe["H"]/self.K_X2)+1)
-                                      + self.X3*(self.V0)/((dataframe["H"]/self.K_X3)+1)
-                                      + self.H0*(self.V0+self.Va)
-                                      - self.V0*(dataframe["H"]-dataframe["OH"])
-                                      - self.Va*(dataframe["H"]-dataframe["OH"]))/(dataframe["H"]-dataframe["OH"]+self.C_NaOH) )
-            SSR = np.sum((dataframe['m']-dataframe["m_calc_003"])**2)
+            cleaned_dataframe["m_calc_003"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
+                                      - self.H0*(self.V0+self.Va)
+                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
+                                      - (self.X2*self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
+                                      - (self.X3*self.V0)/((cleaned_dataframe["H"]/self.K_X3)+1)
+                                      + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
+                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
+                                     
+            SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_003"])**2)
+
+
         elif minimiser_no == 4:
-            dataframe["m_calc_004"] = ((self.CO2*(self.V0)/((dataframe["H"]/dataframe["K1"])+(dataframe["K2"]/dataframe["H"])+1) 
-                                    + self.X1*(self.V0)/((dataframe["H"]/self.K_X1)+1)
-                                    + self.X2*(self.V0)/((dataframe["H"]/self.K_X2)+1)
-                                    + self.X3*(self.V0)/((dataframe["H"]/self.K_X3)+1)
-                                    + self.H0*(self.V0+self.Va)
-                                    - self.V0*(dataframe["H"]-dataframe["OH"])
-                                    - self.Va*(dataframe["H"]-dataframe["OH"]))/(dataframe["H"]-dataframe["OH"]+self.C_NaOH) )
-            SSR = np.sum((dataframe['m']-dataframe["m_calc_004"])**2)
+            cleaned_dataframe["m_calc_004"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
+                                      - self.H0*(self.V0+self.Va)
+                                      - (self.BT*self.V0)/((cleaned_dataframe["H"]/dataframe["KB"])+1) 
+                                      - (self.PT*self.V0)/((cleaned_dataframe["H"]/dataframe["KP2"])+1) 
+                                      - (self.SiT*self.V0)/((cleaned_dataframe["H"]/dataframe["KSi"])+1) 
+                                      - (self.X1*self.V0)/((cleaned_dataframe["H"]/self.K_X1)+1) 
+                                      - (self.X2*self.V0)/((cleaned_dataframe["H"]/self.K_X2)+1)
+                                      - (self.X3*self.V0)/((cleaned_dataframe["H"]/self.K_X3)+1)
+                                      + self.Va*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]))
+                                      / ((2*self.CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
+                                      + self.CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
+                                      -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
+                                     
+            SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_004"])**2)
         return SSR 
 
     def repeat_minimise(self,minimiser_no,SSR_frac_change_limit=1e-4,plot_results=True):
