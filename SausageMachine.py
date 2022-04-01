@@ -9,10 +9,6 @@ This file will comprise the main class used in the sausage machine to perform
 organic alkalinity calculations.
 """
 
-#########################
-#IMPORT REQUIRED PACKAGES
-#########################
-
 from asyncio import sslproto
 from re import M
 import numpy as np
@@ -44,16 +40,6 @@ class org_alk_titration():
         self.temp_TA_known = False
         self.E0_init_est_TA = None
         self.E0_init_est_BT = None
-
-
-
-    ## Magic Numbers ##
-    ###################
-    #ACID TITRANT INFO# Needs to be user specified at some point hopefully
-    ###################
-    C = 0.10060392 # Estimate of OVERALL HCl titrant concentration (mol.kg-1) from CRM_182_0392
-    Cl_HCl = 0.10060392 #ionic strength of acid, 0.1M HCl made up in DI therefore [Cl-] = 0.1 M
-
     ########################################################
     #CONSTANTS CALCULATED BASED ON SALINITY AND TEMPERATURE#
     ########################################################
@@ -61,11 +47,6 @@ class org_alk_titration():
     R = 8.314472 # Universal gas constant
     F = 96485.3399 # Faraday constant
 
-    ###################
-    #BASE TITRANT INFO# User specified too
-    ###################
-    C_NaOH = 0.082744091 # ± 0.000226775 determimed from acidic gran function of standardisation of NaOH using crm standardised HCl
-    I_NaOH = 0.082744091 #ionic strength of NaOH
 
     titration_features = {
         "TA" : {
@@ -77,7 +58,7 @@ class org_alk_titration():
             "E0_init_est" : None,
             "initial_EV" : None,
             "initial_K" : None,
-            "titration_soln" : Cl_HCl,
+            "titration_soln" : None,
             "E0_final" : None,
             "TA_final" : None,
             "TA_processed" : None,
@@ -91,7 +72,7 @@ class org_alk_titration():
             "E0_init_est" : None,
             "initial_EV" : None,
             "initial_K" : None,
-            "titration_soln" : I_NaOH,
+            "titration_soln" : None,
         },
         "BT" : {
             "slope_rho" : -0.0008958,
@@ -99,7 +80,7 @@ class org_alk_titration():
             "df_T_label" : "Acid_T",
             "initial_EV" : None,
             "initial_K" : None,
-            "titration_soln" : Cl_HCl,
+            "titration_soln" : None,
             "E0_final" : None,
             "TA_final" : None,
             "TA_processed" : None,
@@ -112,11 +93,36 @@ class org_alk_titration():
         "K_X3" : 10**-5.5   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
     }
 
+    def set_concentrations(self,C_HCl  = 0.10060392
+                               ,C_NaOH = 0.082744091
+                               ,Cl_HCl = 0.10060392
+                               ,I_NaOH = 0.082744091):
+        self.C_HCl  = C_HCl 
+        self.C_NaOH = C_NaOH
+        self.Cl_HCl = Cl_HCl
+        self.I_NaOH = I_NaOH
+        self.titration_features["TA"]["titration_soln"] = Cl_HCl
+        self.titration_features["NaOH"]["titration_soln"] = I_NaOH
+        self.titration_features["BT"]["titration_soln"] = Cl_HCl
+
+
     def read_master_spreadsheet(self,master_spreadsheet_path
-                               ,master_spreadsheet_filename):
+                               ,master_spreadsheet_filename
+                               ,TA_titration_filename):
 
         MS_filename_full = os.path.join(master_spreadsheet_path,master_spreadsheet_filename)
-        self.DF_MASTER = pd.read_excel(MS_filename_full)
+        DF_MASTER = pd.read_excel(MS_filename_full)
+        self.TA_idx = [DF_MASTER['SAMPLE'] == TA_titration_filename].iloc[0]
+        self.TA_filename = DF_MASTER[DF_MASTER['SAMPLE'] == TA_titration_filename].iloc[0]['SAMPLE']
+        print(self.TA_filename)
+        # TA_idx = DF_MASTER[DF_MASTER['SAMPLE']].index()
+
+
+        # TA_titration = find(self.DF_MASTER['SAMPLE'] == "01.09.21.50UM.001_PROCESSED.xlsx") # 10
+        # NaOH_titration = TA_titration + 1
+        # BT_titration = TA_titration + 2
+
+        self.DF_MASTER = DF_MASTER
 
     def read_excel_spreadsheets(self,TA_filename
                                ,NaOH_filename
@@ -159,7 +165,6 @@ class org_alk_titration():
         # different titration classes can be all used as the same function.
 
         df_TA = self.df_TA
-
         self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
         self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
         self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
@@ -317,9 +322,9 @@ class org_alk_titration():
         dataframe = dataframe[dataframe["F1"].between(10000, 1000000)] #drop all gran funciton values less than 10000 as these are TYPICALLY non linear with respect to m
         slope, intercept, r_value, p_value, std_err =linregress(dataframe["m"], dataframe["F1"])#CALL SLOPE AND INTERCEPT OF Gran function F1
         equivalence_point = -intercept/slope #Calculate equivalence point estimate (g) from Gran function F1
-        TA_est = (equivalence_point*self.C)/V0 #Estimate TA using equivalence point estimate
+        TA_est = (equivalence_point*self.C_HCl)/V0 #Estimate TA using equivalence point estimate
 
-        dataframe["E0_est"] = (dataframe["E(V)"]-(dataframe["K"])*np.log((-V0*TA_est + dataframe["m"]*self.C)/(V0 + dataframe["m"]))) #CALCULATE EO ESTIMATE FOR EACH TITRATION POINT
+        dataframe["E0_est"] = (dataframe["E(V)"]-(dataframe["K"])*np.log((-V0*TA_est + dataframe["m"]*self.C_HCl)/(V0 + dataframe["m"]))) #CALCULATE EO ESTIMATE FOR EACH TITRATION POINT
         E0_init_est = dataframe["E0_est"].mean()#AVERAGE ALL EO VALUES TO OBTAIN AN INITIAL ESTIMATE OF EO
         dataframe["H"] = (np.exp((dataframe["E(V)"]-E0_init_est)/(dataframe["K"]))) #USING EO INITIAL ESTIMATE CALCULATE [H'] FOR EACH TITRATION POINT
         dataframe["GRAN_pH"] = -(np.log10(np.exp((dataframe["E(V)"]-E0_init_est)/dataframe["K"])))#CALCULATE GRAN pH
@@ -352,7 +357,7 @@ class org_alk_titration():
             model = ((np.sum((TA_est_NLSF + 
                               ((V0+new_dataframe["m"])/V0)*
                               ((f_NLSF*new_dataframe["H"])/new_dataframe["Z"]) -
-                              (new_dataframe["m"]/V0)*self.C)**2))*10**12)
+                              (new_dataframe["m"]/V0)*self.C_HCl)**2))*10**12)
 
             return model - data
 
@@ -398,6 +403,7 @@ class org_alk_titration():
 
 
     def pipeline(self):
+        self.set_concentrations()
         self.extract_TA_data()
         self.strip_data("TA")
         self.nernst_factor("TA")
@@ -710,7 +716,6 @@ class org_alk_titration():
             ax.tick_params(bottom='on', left='on', labelleft='on', labelbottom='on', length=5, labelsize = 10.5)
             plt.rc('axes',edgecolor='black')
             plt.annotate(f"SSR: {SSR:.5f}", xy=(0.0650, 0.75), xycoords='axes fraction')
-
 
             list_color  = ["black","red",]
             list_mak    = ["1",       "_"]
