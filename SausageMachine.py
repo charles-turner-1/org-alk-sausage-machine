@@ -421,6 +421,8 @@ class org_alk_titration():
         self.equilibrium_consts_sulfate_HF("BT")
         self.gran_func("BT")
         self.nl_least_squares("BT")
+        self.init_minimiser()
+        self.dissociation_consts()
 
 
     def dissociation_consts(self,carbonate_constants="Lueker",Boron=False,CO2=False):
