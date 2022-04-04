@@ -28,21 +28,21 @@ from IPython.display import Markdown, display
 class org_alk_titration():
     def __init__(self,dataset_path=None,spreadsheet_name_TA = None
                                   ,spreadsheet_name_NaOH = None
-                                  ,spreadsheet_name_BT = None):
+                                  ,spreadsheet_name_OA = None):
         self.dataset_path = dataset_path
         self.spreadsheet_name_TA = spreadsheet_name_TA
         self.spreadsheet_name_NaOH = spreadsheet_name_NaOH
-        self.spreadsheet_name_BT = spreadsheet_name_BT
+        self.spreadsheet_name_OA = spreadsheet_name_OA
         self.S_TA = None
         self.V0 = None
         self.df_TA = None
         self.df_NaOH = None
-        self.df_BT = None
+        self.df_OA = None
         self.titration_features["TA"]["mass_known"] = False
         self.titration_features["NaOH"]["mass_known"] = False
         self.temp_TA_known = False
         self.E0_init_est_TA = None
-        self.E0_init_est_BT = None
+        self.E0_init_est_OA = None
 
     R = 8.314472 # Universal gas constant
     F = 96485.3399 # Faraday constant
@@ -94,6 +94,13 @@ class org_alk_titration():
         "Carbonate" : "Lueker"
     }
 
+    species_concentrations = {
+        "BT" : 0.0004157,
+        "SiT" : 0,
+        "PT" : 0,
+        "CTNa" : 14.999,
+    }
+
     def set_concentrations(self,C_HCl  = 0.10060392
                                ,C_NaOH = 0.082744091
                                ,I_HCl = 0.10060392
@@ -130,8 +137,8 @@ class org_alk_titration():
         self.titration_features["TA"]["slope_rho"] = DF_MASTER['slope_HCl'][TA_IDX].item()
         self.titration_features["TA"]["intercept_rho"] = DF_MASTER['intercept_HCl'][TA_IDX].item()
 
-        self.titration_features["BT"]["slope_rho"] = self.titration_features["BT"]["slope_rho"] 
-        self.titration_features["BT"]["intercept_rho"] = self.titration_features["BT"]["intercept_rho"] 
+        self.titration_features["OA"]["slope_rho"] = self.titration_features["OA"]["slope_rho"] 
+        self.titration_features["OA"]["intercept_rho"] = self.titration_features["OA"]["intercept_rho"] 
 
         self.equilibrium_constants["Carbonate"] = DF_MASTER['K1K2'][TA_IDX].item()
 
@@ -143,7 +150,7 @@ class org_alk_titration():
 
     def read_excel_spreadsheets(self,TA_filename=None
                                ,NaOH_filename=None
-                               ,BT_filename=None):
+                               ,OA_filename=None):
         # This function will read in the excel spreadsheets to memory
         # containing the organic alkalinity titration
         if TA_filename is None:
@@ -154,26 +161,26 @@ class org_alk_titration():
             NaOH_filename = self.NaOH_filename
         else:
             self.NaOH_filename = NaOH_filename
-        if BT_filename is None:
-            BT_filename = self.BT_filename
+        if OA_filename is None:
+            OA_filename = self.OA_filename
         else:
-            self.BT_filename = BT_filename
+            self.OA_filename = OA_filename
 
         TA_filename_full = os.path.join(self.dataset_path,TA_filename)
         NaOH_filename_full = os.path.join(self.dataset_path,NaOH_filename)
-        BT_filename_full = os.path.join(self.dataset_path,BT_filename)
+        OA_filename_full = os.path.join(self.dataset_path,OA_filename)
 
         self.df_TA = pd.read_excel(TA_filename_full)
         self.df_NaOH = pd.read_excel(NaOH_filename_full)
-        self.df_BT = pd.read_excel(BT_filename_full)
+        self.df_OA = pd.read_excel(OA_filename_full)
 
     def read_dataframe(self,titration_label):
         if titration_label == "TA":
             dataframe = self.df_TA
         elif titration_label == "NaOH":
             dataframe = self.df_NaOH
-        elif titration_label == "BT":
-            dataframe = self.df_BT
+        elif titration_label == "OA":
+            dataframe = self.df_OA
         else:
             raise ValueError("Dataframe label not recognised")
         return dataframe
@@ -183,8 +190,8 @@ class org_alk_titration():
             self.df_TA = dataframe
         elif titration_label == "NaOH":
             self.df_NaOH = dataframe
-        elif titration_label == "BT":
-            self.df_BT = dataframe
+        elif titration_label == "OA":
+            self.df_OA = dataframe
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -207,7 +214,7 @@ class org_alk_titration():
         self.df_NaOH["NaOH_T"] = self.df_NaOH["NaOH Temperature (°C)"] #create colume for temperature (Degrees Celsius) of NaOH upon addition to cell 
         self.temp_TA_known = True 
 
-    def extract_BT_data(self,start_idx=0):
+    def extract_OA_data(self,start_idx=0):
 
         if self.titration_features["TA"]["mass_known"] == False:
             raise AssertionError("Total Alkalinity mass must be known. Run convert_vol_to_mass on TA data first")
@@ -219,8 +226,8 @@ class org_alk_titration():
 
         self.Va = df_TA['m'][df_TA.index[-1]] #DEFINE TOTAL MASS OF ACID ADDED DURING FIRST (TA) TITRATION
         self.Vb = df_NaOH['m'][df_NaOH.index[-1]] #DEFINE TOTAL MASS OF BASE ADDED DURING NAOH TITRATION
-        self.V0_BT = (self.V0+self.Va+self.Vb) # Sample mass accounting for additions of acid and base (g) 
-        self.data_start_BT = int(self.df_BT.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
+        self.V0_OA = (self.V0+self.Va+self.Vb) # Sample mass accounting for additions of acid and base (g) 
+        self.data_start_OA = int(self.df_OA.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
 
     def strip_data(self,titration_label,start_idx=0,data_start=41):
         # Data start being 41 makes no sense and needs to be cleaned up into 
@@ -228,8 +235,8 @@ class org_alk_titration():
 
         dataframe = self.read_dataframe(titration_label)
 
-        if titration_label == "BT":
-            data_start = self.data_start_BT
+        if titration_label == "OA":
+            data_start = self.data_start_OA
 
         dataframe['E(V)'] = dataframe.drop(dataframe.index[start_idx:data_start]
                                           ,axis=0)['102 Voltage (V)']
@@ -285,7 +292,7 @@ class org_alk_titration():
 
         self.titration_features[titration_label]["initial_K"] = initial_K
 
-        if titration_label == "BT":
+        if titration_label == "OA":
             self.titration_features[titration_label]["initial_EV"] = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
         self.write_dataframe(dataframe,titration_label)
 
@@ -302,8 +309,8 @@ class org_alk_titration():
             V0 = self.V0
         elif titration_label == "NaOH":
             V0 = self.V0 + self.Va 
-        elif titration_label == "BT":
-            V0 = self.V0_BT
+        elif titration_label == "OA":
+            V0 = self.V0_OA
 
         ImO = (19.924*S/(1000-1.005*S))
 
@@ -314,7 +321,7 @@ class org_alk_titration():
 
     def equilibrium_consts_sulfate_HF(self,titration_label):
         # Needs to be done after calculating ionic strength and salinity (same 
-        # for TA and BT (similar has to be done for NaOH titration, bells &
+        # for TA and OA (similar has to be done for NaOH titration, bells &
         # whistles))
         dataframe = self.read_dataframe(titration_label)
         if titration_label == "NaOH":
@@ -344,8 +351,8 @@ class org_alk_titration():
         dataframe = self.read_dataframe(titration_label)
         if titration_label == "TA":
             V0 = self.V0
-        elif titration_label == "BT":
-            V0 = self.V0_BT
+        elif titration_label == "OA":
+            V0 = self.V0_OA
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -373,8 +380,8 @@ class org_alk_titration():
         TA_est = self.titration_features[titration_label]["TA_est"]
         if titration_label == "TA":
             V0 = self.V0
-        elif titration_label == "BT":
-            V0 = self.V0_BT
+        elif titration_label == "OA":
+            V0 = self.V0_OA
         else:
             raise ValueError("Dataframe label not recognised")
 
@@ -454,14 +461,14 @@ class org_alk_titration():
         self.ion_strength_salinity("NaOH")
         self.pH_H_OH_H0_conc()
 
-        self.extract_BT_data()
-        self.strip_data("BT")
-        self.vol_to_mass("BT")
-        self.nernst_factor("BT")
-        self.ion_strength_salinity("BT")
-        self.equilibrium_consts_sulfate_HF("BT")
-        self.gran_func("BT")
-        self.nl_least_squares("BT")
+        self.extract_OA_data()
+        self.strip_data("OA")
+        self.vol_to_mass("OA")
+        self.nernst_factor("OA")
+        self.ion_strength_salinity("OA")
+        self.equilibrium_consts_sulfate_HF("OA")
+        self.gran_func("OA")
+        self.nl_least_squares("OA")
 
 
     def dissociation_consts(self,carbonate_constants=None,inc_Boron=True,inc_CTNa=True):
@@ -528,9 +535,9 @@ class org_alk_titration():
 
 
     def init_minimiser(self):
-        self.X1 = self.titration_features["BT"]["TA_processed"]
-        self.X2 = self.titration_features["BT"]["TA_processed"]
-        self.X3 = self.titration_features["BT"]["TA_processed"]
+        self.X1 = self.titration_features["OA"]["TA_processed"]
+        self.X2 = self.titration_features["OA"]["TA_processed"]
+        self.X3 = self.titration_features["OA"]["TA_processed"]
 
         self.K_X1 = self.equilibrium_constants["K_X1"]
         self.K_X2 = self.equilibrium_constants["K_X2"]
