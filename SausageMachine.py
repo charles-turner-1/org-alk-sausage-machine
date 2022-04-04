@@ -714,13 +714,13 @@ class org_alk_titration():
         self.get_params(result,minimiser_no)
     
     def ssr(self,minimiser_no):
-        # Where do self.SiT, self.BT, self.PT come from?
         cleaned_dataframe = self.cleaned_df_NaOH
+        dataframe = self.df_NaOH
+
         BT = self.species_concentrations["BT"]
         PT = self.species_concentrations["PT"]
         SiT = self.species_concentrations["SiT"]
         CTNa = self.species_concentrations["CTNa"]
-        dataframe = self.df_NaOH
         if minimiser_no == 1:
             cleaned_dataframe["m_calc_001"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
@@ -734,7 +734,6 @@ class org_alk_titration():
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_001"])**2)
-
         elif minimiser_no == 2:
             cleaned_dataframe["m_calc_002"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
@@ -749,7 +748,6 @@ class org_alk_titration():
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_002"])**2)
-
         elif minimiser_no == 3:
             cleaned_dataframe["m_calc_003"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
@@ -765,8 +763,6 @@ class org_alk_titration():
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
                                      
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_003"])**2)
-
-
         elif minimiser_no == 4:
             cleaned_dataframe["m_calc_004"] = ( -((self.V0*(cleaned_dataframe["H"]-cleaned_dataframe["OH"]) 
                                       - self.H0*(self.V0+self.Va)
@@ -780,7 +776,6 @@ class org_alk_titration():
                                       / ((2*CTNa)/((cleaned_dataframe["H"]**2/( dataframe["K1"]* dataframe["K2"]))+(cleaned_dataframe["H"]/dataframe["K2"])+1)
                                       + CTNa/((cleaned_dataframe["H"]/ dataframe["K1"])+(dataframe["K2"]/cleaned_dataframe["H"])+1)
                                       -cleaned_dataframe["H"] + cleaned_dataframe["OH"] + self.C_NaOH)) )
-                                     
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_004"])**2)
         return SSR 
 
@@ -803,8 +798,7 @@ class org_alk_titration():
         m_calc_labels = ["m_calc_001","m_calc_002","m_calc_003","m_calc_004"]
 
         if plot_results:
-            dataframe = self.cleaned_df_NaOH if minimiser_no < 3 else self.df_NaOH
-
+            dataframe = self.cleaned_df_NaOH
             if minimiser_no == 1:
                 dataframe = dataframe[dataframe["pH"].between(0,5)]
             elif minimiser_no == 2:
