@@ -78,7 +78,7 @@ class org_alk_titration():
             "titration_soln" : None,
         },
         "OA" : {
-            "slope_rho" : -0.0008958,
+            "slope_rho" : -0.0008958,  # Should probably remove default as it's specific to the user ie. this will cause errors nobody understands
             "intercept_rho" : 1.02119193,
             "df_T_label" : "Acid_T",
             "initial_EV" : None,
@@ -94,7 +94,7 @@ class org_alk_titration():
         "K_X1" : 10**-4.5,  # 10**-4.5 #midpoint pH 3 - 7,
         "K_X2" : 10**-5.25, # 10**-5.25 #midpoint pH 3 - 7.55,
         "K_X3" : 10**-5.5,   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
-        "carbonate" : "Lueker"
+        "Carbonate" : "Lueker"
     }
 
     species_concentrations = {
@@ -106,15 +106,15 @@ class org_alk_titration():
 
     def set_concentrations(self,C_HCl  = 0.10060392
                                ,C_NaOH = 0.082744091
-                               ,Cl_HCl = 0.10060392
+                               ,I_HCl = 0.10060392
                                ,I_NaOH = 0.082744091):
         self.C_HCl  = C_HCl 
         self.C_NaOH = C_NaOH
-        self.Cl_HCl = Cl_HCl
+        self.I_HCl = I_HCl
         self.I_NaOH = I_NaOH
-        self.titration_features["TA"]["titration_soln"] = Cl_HCl
+        self.titration_features["TA"]["titration_soln"] = I_HCl
         self.titration_features["NaOH"]["titration_soln"] = I_NaOH
-        self.titration_features["OA"]["titration_soln"] = Cl_HCl
+        self.titration_features["OA"]["titration_soln"] = I_HCl
 
 
     def read_master_spreadsheet(self,master_spreadsheet_path
@@ -128,7 +128,8 @@ class org_alk_titration():
         TA_IDX = DF_MASTER[DF_MASTER['SAMPLE']==self.TA_filename].index.values
         self.NaOH_filename = DF_MASTER['SAMPLE'][TA_IDX+1].item()
         self.OA_filename = DF_MASTER['SAMPLE'][TA_IDX+2].item()
-        self.DF_MASTER = DF_MASTER # Might be uneccesary to keep this
+        self.DF_MASTER = DF_MASTER # Might be unecessary to keep this
+        self.master_spreadsheet_used = True
 
         self.S_TA = DF_MASTER['SALINITY'][TA_IDX].item()
         self.V0 = DF_MASTER['g_0'][TA_IDX].item() - DF_MASTER['g_1'][TA_IDX].item()
@@ -142,9 +143,10 @@ class org_alk_titration():
         self.titration_features["OA"]["slope_rho"] = self.titration_features["OA"]["slope_rho"] 
         self.titration_features["OA"]["intercept_rho"] = self.titration_features["OA"]["intercept_rho"] 
 
-        self.equilibrium_constants["carbonate"] = DF_MASTER['carbonate_K'][TA_IDX].item()
+        self.equilibrium_constants["Carbonate"] = DF_MASTER['K1K2'][TA_IDX].item()
 
-        self.species_concentrations['CTNa'] = DF_MASTER['CTNa'][TA_IDX].item()
+        self.species_concentrations['CTNa'] = 0 if self.equilibrium_constants['Carbonate'] is False else DF_MASTER['CTNa'][TA_IDX].item()
+        self.calculate_KB = DF_MASTER['KB'][TA_IDX].item()
 
 
 
@@ -444,6 +446,8 @@ class org_alk_titration():
 
 
     def pipeline(self):
+        if self.master_spreadsheet_used is True:
+            self.read_excel_spreadsheets()
         self.set_concentrations()
         self.extract_TA_data()
         self.strip_data("TA")
@@ -472,13 +476,18 @@ class org_alk_titration():
         self.dissociation_consts()
 
 
-    def dissociation_consts(self,carbonate_constants=None,inc_Boron=True,inc_CTNa=False):
+    def dissociation_consts(self,carbonate_constants=None,inc_Boron=True,inc_CTNa=True):
         dataframe = self.df_NaOH
         if carbonate_constants is None:
-            carbonate_constants = self.equilibrium_constants["carbonate"]
-        self.vary_CTNA = inc_CTNa
+            carbonate_constants = self.equilibrium_constants["Carbonate"]
 
-        if carbonate_constants == "Lueker":
+        if carbonate_constants is False: # Just feed zero into everything. Might be a way of doing this more cleanly?
+            self.vary_CTNa = inc_CTNa = False
+            dataframe["pK1"] = 0* dataframe["T"]
+            dataframe["pK2"] = 0* dataframe["T"]
+            dataframe["K1"] = 0* dataframe["pK1"] 
+            dataframe["K2"] = 0* dataframe["pK2"]
+        elif carbonate_constants == "Lueker":
             dataframe["pK1"] = 3633.86/dataframe["T"] - 61.2172 +9.67770*np.log(dataframe["T"]) - 0.011555*dataframe["S"] + 0.0001152*dataframe["S"]**2 
             dataframe["pK2"] = 471.78/dataframe["T"] + 25.9290 - 3.16967*np.log(dataframe["T"]) - 0.01781*dataframe["S"] + 0.0001122*dataframe["S"]**2 
             dataframe["K1"] = 10**-dataframe["pK1"] 
@@ -488,10 +497,30 @@ class org_alk_titration():
             dataframe["pK2"] = 5371.9645+1.671221*dataframe["T"]+0.22913*dataframe["S"]+18.3802*np.log10(dataframe["S"])-128375.28/dataframe["T"]-2194.3055*np.log10(dataframe["T"])-(8.0944*10**-4)*dataframe["S"]*dataframe["T"]-5617.11*np.log10(dataframe["S"])/dataframe["T"] + 2.136*dataframe["S"]/dataframe["T"]
             dataframe["K1"] = 10**-dataframe["pK1"] 
             dataframe["K2"] = 10**-dataframe["pK2"]
+        elif carbonate_constants == 'Cai':
+            dataframe['F1T'] = 200.1/dataframe["T"] + 0.3220
+            dataframe['F2T'] = -129.24/dataframe["T"] + 1.4381
+            dataframe["pK1"] = 3404.71/dataframe["T"] + 0.032786*dataframe["T"] - 14.8435 - 0.071692*dataframe['F1T']*(dataframe["S"]**0.5) + 0.0021487*dataframe["S"]
+            dataframe["pK2"] = 2902.39/dataframe["T"] + 0.02379*dataframe["T"] - 6.4980 - 0.3191*dataframe['F2T']*(dataframe["S"]**0.5) + 0.0198*dataframe["S"]
+            dataframe["K1"] = 10**-dataframe["pK1"] 
+            dataframe["K2"] = 10**-dataframe["pK2"]
+        elif carbonate_constants == 'Prieto':
+            dataframe["pK1"] = -43.6977 - 0.0129037*dataframe['S'] + (1.364*10**-4)*(dataframe['S']**2) + 2885.378/dataframe['T'] +7.045159*np.log(dataframe['T'])
+            dataframe["pK2"] = -452.0940 + (13.142162*dataframe['S'])-(8.101*10**-4)*dataframe['S']**2 + 21263.61/dataframe['T'] + 68.483143*np.log(dataframe['T']) + (-581.4428*dataframe['S'] + 0.259601*dataframe['S']**2)/dataframe['T'] - 1.967035*dataframe['S']*np.log(dataframe['T'])
+            dataframe["K1"] = 10**-dataframe["pK1"] 
+            dataframe["K2"] = 10**-dataframe["pK2"]
+        elif carbonate_constants == 'Millero':
+            dataframe['pK01'] = -126.34048 + 6320.813/dataframe['T'] + 19.568224*np.log(dataframe['T'])
+            dataframe['pK02'] =  -90.18333 + 5143.692/dataframe['T'] + 14.61358*np.log(dataframe['T'])
+            dataframe["pK1"] = dataframe['pK01'] + 13.4051*dataframe['S']**0.5 + 0.03185*dataframe['S'] + (-5.218*10**-5)*dataframe['S']**2 + (-531.095*dataframe['S']**0.5)/dataframe['T'] + (-5.7789*dataframe['S']/dataframe['T']) + (-2.0663*(dataframe['S']**0.5*np.log(dataframe['T'])))
+            dataframe["pK2"] = dataframe['pK02']  + 21.5724*dataframe['S']**0.5 + 0.1212*dataframe['S'] + (-3.714*10**-4)*dataframe['S']**2 + (-798.292*dataframe['S']**0.5)/dataframe['T'] + (-18.951*dataframe['S']/dataframe['T']) + (-3.403*(dataframe['S']**0.5*np.log(dataframe['T'])))
+            dataframe["K1"] = 10**-dataframe["pK1"] 
+            dataframe["K2"] = 10**-dataframe["pK2"]
         else:
             raise ValueError("Dissociation constants not recognised")
 
-        dataframe['KB'] = ( (-8966.90 - 2890.53*dataframe["S"]**0.5 
+        # If KB is True, calculate B automatically. Is this the calculation?
+        dataframe['KB'] = self.calculate_KB * ( (-8966.90 - 2890.53*dataframe["S"]**0.5 
                           - 77.942*dataframe["S"] + 1.728*dataframe["S"]**1.5 
                           - 0.0996*dataframe["S"]**2)/dataframe["T"]
                           + (148.0248 + 137.1942*dataframe["S"]**0.5 + 1.62142*dataframe["S"])
@@ -524,7 +553,7 @@ class org_alk_titration():
         self.K_X3 = self.equilibrium_constants["K_X3"]
 
     def add_params(self,parameters,minimiser_no):
-       parameters.add('CTNa',value=self.species_concentrations['CTNa'])
+       parameters.add('CTNa',value=self.species_concentrations['CTNa'],vary=self.vary_CTNa)
        if minimiser_no == 1: 
             parameters.add('H0',    value = self.H0 ) #highest [H+] value used as initial estimate
             parameters.add('C_NaOH',value = self.C_NaOH, vary = False) 
