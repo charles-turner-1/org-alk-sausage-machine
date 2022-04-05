@@ -482,6 +482,7 @@ class org_alk_titration():
         if carbonate_constants is None:
             carbonate_constants = self.equilibrium_constants["Carbonate"]
 
+        self.vary_CTNa = True
         if carbonate_constants is False: # Just feed zero into everything. Might be a way of doing this more cleanly?
             self.vary_CTNa = inc_CTNa = False
             dataframe["pK1"] = 0* dataframe["T"]
