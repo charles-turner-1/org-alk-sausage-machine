@@ -811,7 +811,7 @@ class org_alk_titration():
         num_reps = 0
         while SSR_frac_change > SSR_frac_change_limit:
             if num_reps > 100:
-                raise Exception("This doesn't look like its going to work after 100 repetitions")
+                raise Exception("This doesn't look like its going to work after 100 repetitions. Try reducing fractional change limit.")
             self.minimise(minimiser_no)
             SSR = self.ssr(minimiser_no)
             SSR_frac_change = (((SSR  - SSR_init)/ SSR_init)**2)**0.5
