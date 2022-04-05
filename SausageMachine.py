@@ -131,6 +131,7 @@ class org_alk_titration():
         self.DF_MASTER = DF_MASTER # Might be unecessary to keep this
         self.master_spreadsheet_used = True
 
+        self.dataset_path = DF_MASTER['FILE_PATH'][TA_IDX].item()
         self.S_TA = DF_MASTER['SALINITY'][TA_IDX].item()
         self.V0 = DF_MASTER['g_0'][TA_IDX].item() - DF_MASTER['g_1'][TA_IDX].item()
 
@@ -143,7 +144,7 @@ class org_alk_titration():
         self.titration_features["OA"]["slope_rho"] = self.titration_features["OA"]["slope_rho"] 
         self.titration_features["OA"]["intercept_rho"] = self.titration_features["OA"]["intercept_rho"] 
 
-        self.equilibrium_constants["Carbonate"] = DF_MASTER['K1K2'][TA_IDX].item()
+        self.equilibrium_constants["Carbonate"] = DF_MASTER['K1K2'][TA_IDX].item() if DF_MASTER['K1K2'][TA_IDX].item() != 0.0 else False
 
         self.species_concentrations['CTNa'] = 0 if self.equilibrium_constants['Carbonate'] is False else DF_MASTER['CTNa'][TA_IDX].item()
         self.calculate_KB = DF_MASTER['KB'][TA_IDX].item()
