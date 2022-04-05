@@ -723,7 +723,7 @@ class org_alk_titration():
                         - (2 * self.Vb * CTNa) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user 
                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
-                        - (self.V0)*(X3/(1+dataframe["H"]/K_X3))
+                        - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
                 return model - data
 
         params = Parameters()
