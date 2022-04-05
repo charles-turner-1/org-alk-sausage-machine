@@ -652,7 +652,7 @@ class org_alk_titration():
                         - self.V0 * (PT / (1 + dataframe["H"] / dataframe["KP2"]))  # optional, used if PT is above a certain value. PT user supplied, KP2 calculated
                         - self.V0 * (SiT / (1 + dataframe["H"] / dataframe["KSi"])) # optional, used if SiT is above a certain value. SiT user supplied, KSi calculated
                         - (self.Vb * CTNa) / (1+(dataframe["H"]/dataframe["K1"])+(dataframe["K2"]/dataframe["H"]))
-                        - (2 * self.Vb * CTna) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user
+                        - (2 * self.Vb * CTNa) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user
                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1)))
                 return model - data
         elif minimiser_no == 2:
