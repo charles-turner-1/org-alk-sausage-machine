@@ -530,7 +530,7 @@ class org_alk_titration():
                           *np.log(dataframe["T"])+ (0.053105*dataframe["S"]**0.5)*dataframe["T"] )
 
         self.species_concentrations['BT'] = inc_Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
-        self.species_concentrations['CTNa'] *= inc_CTNa *(self.Vb/1000)
+        self.species_concentrations['CTNa'] *= inc_CTNa *1e-6 *(self.Vb/1000)
         # Since Boron and CO2 are both false by default, I'm pretty sure that this should make sure they don't contribute 
         # unless specified.
 
