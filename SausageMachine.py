@@ -655,6 +655,7 @@ class org_alk_titration():
                         - (2 * self.Vb * CTNa) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user
                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1)))
                 return model - data
+
         elif minimiser_no == 2:
             def fcn2min(params, x, data):
                 H0 = params['H0']
@@ -665,12 +666,17 @@ class org_alk_titration():
                 K_X2 = params['K_X2']
 
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
-                         -((self.V0+self.Va)*H0)
-                         +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
-                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
-                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2)))
+                        -((self.V0+self.Va)*H0)
+                        +(dataframe["m"]*C_NaOH) 
+                        - self.V0 *(BT / (1 + dataframe["H"] / dataframe["KB"])) # optional, but used for all real seawater samples. BT and KB calculated 
+                        - self.V0 * (PT / (1 + dataframe["H"] / dataframe["KP2"]))  # optional, used if PT is above a certain value. PT user supplied, KP2 calculated 
+                        - self.V0 * (SiT / (1 + dataframe["H"] / dataframe["KSi"])) # optional, used if SiT is above a certain value. SiT user supplied, KSi calculated 
+                        - (self.Vb * CTNa) / (1 + (dataframe["H"] / dataframe["K1"]) + (dataframe["K2"] / dataframe["H"])) #K1c and K2c are carbonate system dissociation constants 
+                        - (2 * self.Vb * CTNa) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user 
+                        - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
+                        - (self.V0)*(X2/(1+dataframe["H"]/K_X2)))
                 return model - data
+
         elif minimiser_no == 3:
             def fcn2min(params, x, data):
                 H0 = params['H0']
@@ -683,13 +689,18 @@ class org_alk_titration():
                 K_X3 = params['K_X3']
 
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
-                         -((self.V0+self.Va)*H0)
-                         +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
-                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
-                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
-                         - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
+                        -((self.V0+self.Va)*H0)
+                        +(dataframe["m"]*C_NaOH) 
+                        - self.V0 *(BT / (1 + dataframe["H"] / dataframe["KB"])) # optional, but used for all real seawater samples. BT and KB calculated 
+                        - self.V0 * (PT / (1 + dataframe["H"] / dataframe["KP2"]))  # optional, used if PT is above a certain value. PT user supplied, KP2 calculated 
+                        - self.V0 * (SiT / (1 + dataframe["H"] / dataframe["KSi"])) # optional, used if SiT is above a certain value. SiT user supplied, KSi calculated 
+                        - (self.Vb * CTNa) / (1 + (dataframe["H"] / dataframe["K1"]) + (dataframe["K2"] / dataframe["H"])) #K1c and K2c are carbonate system dissociation constants 
+                        - (2 * self.Vb * CTNa) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user 
+                        - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
+                        - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
+                        - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
                 return model - data
+
         elif minimiser_no == 4:
             def fcn2min(params, x, data):
                 H0 = params['H0']
@@ -700,14 +711,19 @@ class org_alk_titration():
                 K_X2 = params['K_X2']
                 X3 = params['X3']
                 K_X3 = params['K_X3']
-    
+   
+
                 model = ((self.V0 + self.Va+ dataframe["m"])*(dataframe["H"]-dataframe["OH"]) 
-                         -((self.V0+self.Va)*H0)
-                         +(dataframe["m"]*C_NaOH) 
-                         - (self.V0)*(CTNa/(1+(dataframe["H"]/(dataframe["K1"]))+dataframe["K2"]/dataframe["H"]))
-                         - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
-                         - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
-                         - (self.V0)*(X3/(1+dataframe["H"]/K_X3)))
+                        -((self.V0+self.Va)*H0)
+                        +(dataframe["m"]*C_NaOH) 
+                        - self.V0 *(BT / (1 + dataframe["H"] / dataframe["KB"])) # optional, but used for all real seawater samples. BT and KB calculated 
+                        - self.V0 * (PT / (1 + dataframe["H"] / dataframe["KP2"]))  # optional, used if PT is above a certain value. PT user supplied, KP2 calculated 
+                        - self.V0 * (SiT / (1 + dataframe["H"] / dataframe["KSi"])) # optional, used if SiT is above a certain value. SiT user supplied, KSi calculated 
+                        - (self.Vb * CTNa) / (1 + (dataframe["H"] / dataframe["K1"]) + (dataframe["K2"] / dataframe["H"])) #K1c and K2c are carbonate system dissociation constants 
+                        - (2 * self.Vb * CTNa) / (1 + (dataframe["H"]**2 / (dataframe["K1"] * dataframe["K2"])) + (dataframe["H"] / dataframe["K2"])) #K1c and K2c chosen by the user 
+                        - (self.V0)*(X1/(1+dataframe["H"]/K_X1))
+                        - (self.V0)*(X2/(1+dataframe["H"]/K_X2))
+                        - (self.V0)*(X3/(1+dataframe["H"]/K_X3))
                 return model - data
 
         params = Parameters()
