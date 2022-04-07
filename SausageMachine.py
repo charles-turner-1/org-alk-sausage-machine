@@ -65,6 +65,7 @@ class org_alk_titration():
             "E0_final" : None,
             "TA_final" : None,
             "TA_processed" : None,
+            "data_start" : None,
         },
         "NaOH" : {
             "slope_rho" : -0.014702658,
@@ -87,6 +88,7 @@ class org_alk_titration():
             "E0_final" : None,
             "TA_final" : None,
             "TA_processed" : None,
+            "data_start" : None,
         }
     }
 
@@ -209,7 +211,7 @@ class org_alk_titration():
             self.V0 = df_TA.iloc[g_start_idx]['g_0']-df_TA.iloc[g_start_idx]['g_1'] # Sample mass (g)
         if self.S_TA is None:
             self.S_TA = df_TA.iloc[g_start_idx]['SALINITY']  # Sample Salinity 
-        self.data_start_TA = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
+        self.titration_features["TA"]["data_start"] = int(df_TA.iloc[g_start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
         self.titration_features["TA"]["initial_EV"] = df_TA.iloc[g_end_idx]['102 Voltage (V)'] #EV of sample before any acid addition, at index = 10
 
     def extract_NaOH_data(self):
@@ -231,16 +233,12 @@ class org_alk_titration():
         self.Va = df_TA['m'][df_TA.index[-1]] #DEFINE TOTAL MASS OF ACID ADDED DURING FIRST (TA) TITRATION
         self.Vb = df_NaOH['m'][df_NaOH.index[-1]] #DEFINE TOTAL MASS OF BASE ADDED DURING NAOH TITRATION
         self.V0_OA = (self.V0+self.Va+self.Vb) # Sample mass accounting for additions of acid and base (g) 
-        self.data_start_OA = int(self.df_OA.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
+        self.titration_features["OA"]["data_start"]= int(self.df_OA.iloc[start_idx]['data_start']-1) #row which titration starts, eg after initial acid addition and degassing
 
-    def strip_data(self,titration_label,start_idx=0,data_start=41):
-        # Data start being 41 makes no sense and needs to be cleaned up into 
-        # something (more?) sensible
+    def strip_data(self,titration_label,start_idx=0):
 
         dataframe = self.read_dataframe(titration_label)
-
-        if titration_label == "OA":
-            data_start = self.data_start_OA
+        data_start = self.titration_features[titration_label]["data_start"]
 
         dataframe['E(V)'] = dataframe.drop(dataframe.index[start_idx:data_start]
                                           ,axis=0)['102 Voltage (V)']
