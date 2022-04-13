@@ -584,7 +584,8 @@ class org_alk_titration():
         self.K_X3 = self.equilibrium_constants["K_X3"]
 
         minimiser_output_params = {'SSR' : None, 'X1' : None, 'X2' : None
-                      ,'X3' : None ,'pK1' : None, 'pK2' : None, 'pK3' : None}
+                      ,'X3' : None ,'pK1' : None, 'pK2' : None, 'pK3' : None
+                      ,'CONVERGENCE_FACTOR' : None}
 
         self.df_minimiser_outputs = pd.DataFrame([minimiser_output_params for _ in range(4)])
         self.df_minimiser_outputs.index += 1
@@ -865,6 +866,7 @@ class org_alk_titration():
         self.df_minimiser_outputs["pK1"][minimiser_no] = -np.log10(self.K_X1)
         self.df_minimiser_outputs["pK2"][minimiser_no] = -np.log10(self.K_X2)
         self.df_minimiser_outputs["pK3"][minimiser_no] = -np.log10(self.K_X3)
+        self.df_minimiser_outputs["CONVERGENCE_FACTOR"][minimiser_no] = SSR_frac_change_limit
         self.outputs["CONVERGENCE_FACTOR"] = SSR_frac_change_limit
 
 
@@ -928,9 +930,6 @@ class org_alk_titration():
 
         for (label,content) in output_params.items():
             self.outputs[label] = content
-        
-
-        
 
     def write_results(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
         # In this function, we will look up the master results filename, and look
@@ -954,7 +953,7 @@ class org_alk_titration():
         self.outputs["TA"] = self.titration_features["TA"]["TA_final"] 
         self.outputs["ORGALK"] = self.titration_features["OA"]["TA_final"] 
 
-        self.outputs["MASS"] = "Ask Dan"
+        self.outputs["MASS"] = self.df_NaOH['m'][self.df_NaOH.index[-1]]
         df_outputs = pd.DataFrame([self.outputs])
 
         self.append_df_to_excel(output_filename,df_outputs)
