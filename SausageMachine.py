@@ -10,6 +10,8 @@ organic alkalinity calculations.
 """
 
 from asyncio import sslproto
+from doctest import master
+from logging import warning
 from multiprocessing.sharedctypes import Value
 from re import M
 import numpy as np
@@ -99,6 +101,24 @@ class org_alk_titration():
         "Carbonate" : "Lueker"
     }
 
+    outputs = {
+        "SAMPLE" : None,
+        "SALINITY" : None,
+        "TA" : None,
+        "ORGALK" : None,
+        "MASS" : None,
+        "H0" : None,
+        "X1" : None,
+        "X2" : None,
+        "X3" : None,
+        "pK1" : None,
+        "pK2" : None,
+        "pK3" : None,
+        "pK1_INITIAL" : 4.5,
+        "pK2_INITIAL" : 5.25,
+        "pK3_INITIAL" : 5.5,
+        }
+
     species_concentrations = {
         "BT" : 0.0004157,
         "SiT" : 0,
@@ -125,31 +145,41 @@ class org_alk_titration():
 
         MS_filename_full = os.path.join(master_spreadsheet_path,master_spreadsheet_filename)
         DF_MASTER = pd.read_excel(MS_filename_full)
-        self.TA_filename = DF_MASTER[DF_MASTER['SAMPLE'] == TA_titration_filename].iloc[0]['SAMPLE']
 
-        TA_IDX = DF_MASTER[DF_MASTER['SAMPLE']==self.TA_filename].index.values
-        self.NaOH_filename = DF_MASTER['SAMPLE'][TA_IDX+1].item()
-        self.OA_filename = DF_MASTER['SAMPLE'][TA_IDX+2].item()
+        TIT_IDX = DF_MASTER[DF_MASTER['SAMPLE_TA']==TA_titration_filename].index.values
+
+        self.TA_filename = DF_MASTER['SAMPLE_TA'][TIT_IDX].item()
+        self.NaOH_filename = DF_MASTER['SAMPLE_NAOH'][TIT_IDX].item()
+        self.OA_filename = DF_MASTER['SAMPLE_OA'][TIT_IDX].item()
+        # Could put the filenames in a dict to simplify this.
         self.DF_MASTER = DF_MASTER # Might be unecessary to keep this
         self.master_spreadsheet_used = True
 
-        self.dataset_path = DF_MASTER['FILE_PATH'][TA_IDX].item()
-        self.S_TA = DF_MASTER['SALINITY'][TA_IDX].item()
-        self.V0 = DF_MASTER['g_0'][TA_IDX].item() - DF_MASTER['g_1'][TA_IDX].item()
+        self.dataset_path = DF_MASTER['FILE_PATH'][TIT_IDX].item()
+        self.outputs["SALINITY"] = self.S_TA = DF_MASTER['SALINITY'][TIT_IDX].item()
+        self.V0 = DF_MASTER['g_0'][TIT_IDX].item() - DF_MASTER['g_1'][TIT_IDX].item()
 
-        self.titration_features["NaOH"]["slope_rho"] = DF_MASTER['slope_NaOH'][TA_IDX].item()
-        self.titration_features["NaOH"]["intercept_rho"] = DF_MASTER['intercept_NaOH'][TA_IDX].item()
+        self.titration_features["NaOH"]["slope_rho"] = DF_MASTER['slope_NaOH'][TIT_IDX].item()
+        self.titration_features["NaOH"]["intercept_rho"] = DF_MASTER['intercept_NaOH'][TIT_IDX].item()
 
-        self.titration_features["TA"]["slope_rho"] = DF_MASTER['slope_HCl'][TA_IDX].item()
-        self.titration_features["TA"]["intercept_rho"] = DF_MASTER['intercept_HCl'][TA_IDX].item()
+        self.titration_features["TA"]["slope_rho"] = DF_MASTER['slope_HCl'][TIT_IDX].item()
+        self.titration_features["TA"]["intercept_rho"] = DF_MASTER['intercept_HCl'][TIT_IDX].item()
 
         self.titration_features["OA"]["slope_rho"] = self.titration_features["OA"]["slope_rho"] 
         self.titration_features["OA"]["intercept_rho"] = self.titration_features["OA"]["intercept_rho"] 
 
-        self.equilibrium_constants["Carbonate"] = DF_MASTER['K1K2'][TA_IDX].item() if DF_MASTER['K1K2'][TA_IDX].item() != 0.0 else False
+        self.equilibrium_constants["Carbonate"] = DF_MASTER['K1K2'][TIT_IDX].item() if DF_MASTER['K1K2'][TIT_IDX].item() != 0.0 else False
 
-        self.species_concentrations['CTNa'] = 0 if self.equilibrium_constants['Carbonate'] is False else DF_MASTER['CTNa'][TA_IDX].item()
-        self.calculate_KB = DF_MASTER['KB'][TA_IDX].item()
+        if DF_MASTER['K_X1'][TIT_IDX].item() is not False:
+            self.equilibrium_constants["K_X1"] = DF_MASTER['K_X1'][TIT_IDX].item()
+            self.equilibrium_constants["K_X2"] = DF_MASTER['K_X2'][TIT_IDX].item()
+            self.equilibrium_constants["K_X3"] = DF_MASTER['K_X3'][TIT_IDX].item()
+            self.outputs["pK1_INITIAL"] = -np.log10(self.equilibrium_constants["K_X1"])
+            self.outputs["pK2_INITIAL"] = -np.log10(self.equilibrium_constants["K_X2"])
+            self.outputs["pK3_INITIAL"] = -np.log10(self.equilibrium_constants["K_X3"])
+
+        self.species_concentrations['CTNa'] = 0 if self.equilibrium_constants['Carbonate'] is False else DF_MASTER['CTNa'][TIT_IDX].item()
+        self.calculate_KB = DF_MASTER['KB'][TIT_IDX].item()
 
 
 
@@ -552,6 +582,13 @@ class org_alk_titration():
         self.K_X2 = self.equilibrium_constants["K_X2"]
         self.K_X3 = self.equilibrium_constants["K_X3"]
 
+        minimiser_output_params = {'SSR' : None, 'X1' : None, 'X2' : None
+                      ,'X3' : None ,'pK1' : None, 'pK2' : None, 'pK3' : None}
+
+        self.df_minimiser_outputs = pd.DataFrame([minimiser_output_params for _ in range(4)])
+        self.df_minimiser_outputs.index += 1
+
+
     def add_params(self,parameters,minimiser_no):
        parameters.add('CTNa',value=self.species_concentrations['CTNa'],vary=self.vary_CTNa)
        if minimiser_no == 1: 
@@ -591,15 +628,12 @@ class org_alk_titration():
         if minimiser_no == 1 or minimiser_no == 2:
             self.X1 = result.params.get('X1').value
             self.K_X1 = result.params.get('K_X1').value
-            pK1 = -np.log10(self.K_X1)
         if minimiser_no == 2 or minimiser_no == 3:
             self.X2 = result.params.get('X2').value
             self.K_X2 = result.params.get('K_X2').value
-            pK2 = -np.log10(self.K_X2)
         if minimiser_no == 3 or minimiser_no == 4:
             self.X3 = result.params.get('X3').value
             self.K_X3 = result.params.get('K_X3').value
-            pK3 = -np.log10(self.K_X3)
         if minimiser_no == 3:
             self.C_NaOH = result.params.get('C_NaOH').value
         
@@ -607,6 +641,9 @@ class org_alk_titration():
         # Throw a warning if not
 
         # Check that X1+X2+X3 are sensible (NB if pK[i] is dodgy X[i] is probably dodgy)
+
+        # We also need to rewrite this in order to not necessarily write this to 
+        # only write the parameters if SSR decreases: or do we?
 
 
     def minimise(self,minimiser_no):
@@ -803,6 +840,7 @@ class org_alk_titration():
         return SSR 
 
     def repeat_minimise(self,minimiser_no,SSR_frac_change_limit=1e-4,plot_results=True):
+
         self.minimise(minimiser_no)
         SSR_init = self.ssr(minimiser_no)
         SSR_frac_change = 1
@@ -817,6 +855,16 @@ class org_alk_titration():
             num_reps += 1
         print(f"Minimisation repeated {num_reps} times in order to reach fractional change of {SSR_frac_change_limit} in SSR")
         print(f"Final SSR value = {SSR:.5f}")
+
+
+        self.df_minimiser_outputs["SSR"][minimiser_no] = SSR
+        self.df_minimiser_outputs["X1"][minimiser_no] = self.X1 * 1e6
+        self.df_minimiser_outputs["X2"][minimiser_no] = self.X2 * 1e6
+        self.df_minimiser_outputs["X3"][minimiser_no] = self.X3 * 1e6
+        self.df_minimiser_outputs["pK1"][minimiser_no] = -np.log10(self.K_X1)
+        self.df_minimiser_outputs["pK2"][minimiser_no] = -np.log10(self.K_X2)
+        self.df_minimiser_outputs["pK3"][minimiser_no] = -np.log10(self.K_X3)
+
 
         if minimiser_no == 1:
             print('X1 (initial):', self.X1*10**6, "| pK1(initial): ", -np.log10(self.K_X1), '| H0 :', self.H0 ) 
@@ -858,93 +906,73 @@ class org_alk_titration():
                       handler_map={tuple:MarkerHandler()}) 
 
             plt.show()
+
+    def print_output_params(self):
+            display(self.df_minimiser_outputs)
+
+    def select_output_params(self,row_to_select=None):
+        # In this function, print out the parameters from self.df_minimiser_outputs.
+        # Then, ask the user to select a row to save. Then write these to our 
+        # outputs dict.
+        if row_to_select is None:
+            display(self.df_minimiser_outputs)
+            row_to_select = input("Enter the row you wish to save")
+        output_params = self.df_minimiser_outputs.iloc[row_to_select-1] # For some reason 1 based indexing not working in selection
+
+        if row_to_select < 4:
+            output_params["X3"] = output_params["pK3"] = None
+        if row_to_select < 3:
+            output_params["X2"] = output_params["pK2"] = None
+
+        for (label,content) in output_params.items():
+            self.outputs[label] = content
         
 
+        
 
+    def write_results(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
+        # In this function, we will look up the master results filename, and look
+        # for a row that contains a sample with the name of our sample we are 
+        # running. If we find this, then abort and throw an error message. If not, 
+        # append all relevant results to the master filename
+        output_filename = os.path.join(master_results_path,master_results_filename)
+        sample_filename = self.TA_filename
+        df_outputs = pd.read_excel(output_filename)
 
-    def write_to_excel(self, filename,df, sheet_name='Sheet1', startrow=None,
-                           truncate_sheet=False, 
-                           **to_excel_kwargs):
-        """
-        Append a DataFrame [df] to existing Excel file [filename]
-        into [sheet_name] Sheet.
-        If [filename] doesn't exist, then this function will create it.
+        if sample_filename in df_outputs['SAMPLE'].to_list():
+            raise KeyError("""You are trying to write to a sample name which is already
+                     present in the master results file. Exiting to avoid potentially
+                     overwriting previous results.""")
+        else:
+            self.outputs["SAMPLE"] = sample_filename
+        # If we've got this far we now need to create the dataframe that we will 
+        # write to this row. Lets start with the stuff which is initial values, 
+        # not calculated
 
-        @param filename: File path or existing ExcelWriter
-                         (Example: '/path/to/file.xlsx')
-        @param df: DataFrame to save to workbook
-        @param sheet_name: Name of sheet which will contain DataFrame.
-                           (default: 'Sheet1')
-        @param startrow: upper left cell row to dump data frame.
-                         Per default (startrow=None) calculate the last row
-                         in the existing DF and write to the next row...
-        @param truncate_sheet: truncate (remove and recreate) [sheet_name]
-                               before writing DataFrame to Excel file
-        @param to_excel_kwargs: arguments which will be passed to `DataFrame.to_excel()`
-                                [can be a dictionary]
-        @return: None
+        self.outputs["H0"] = self.H0
 
-        Usage examples:
+        self.outputs["TA"] = self.titration_features["TA"]["TA_final"] 
+        self.outputs["ORGALK"] = self.titration_features["OA"]["TA_final"] 
 
-        >>> append_df_to_excel('d:/temp/test.xlsx', df)
+        self.outputs["MASS"] = "Ask Dan"
 
-        >>> append_df_to_excel('d:/temp/test.xlsx', df, header=None, index=False)
+        df_outputs.append(self.outputs,ignore_index=True)
 
-        >>> append_df_to_excel('d:/temp/test.xlsx', df, sheet_name='Sheet2',
-                               index=False)
+        writer = pd.ExcelWriter(output_filename, engine='openpyxl', mode='a',if_sheet_exists="replace")
+        startrow = writer.book[sheet_name].max_row
 
-        >>> append_df_to_excel('d:/temp/test.xlsx', df, sheet_name='Sheet2', 
-                               index=False, startrow=25)
-
-        (c) [MaxU](https://stackoverflow.com/users/5741205/maxu?tab=profile)
-        """
-        # Excel file doesn't exist - saving and exiting
-        if not os.path.isfile(filename):
-            df.to_excel(
-                filename,
-                sheet_name=sheet_name, 
-                startrow=startrow if startrow is not None else 0, 
-                **to_excel_kwargs)
-            return
-
-        # ignore [engine] parameter if it was passed
-        if 'engine' in to_excel_kwargs:
-            to_excel_kwargs.pop('engine')
-
-        writer = pd.ExcelWriter(filename, engine='openpyxl', mode='a')
-
-        # try to open an existing workbook
-        writer.book = load_workbook(filename)
-
-        # get the last row in the existing Excel sheet
-        # if it was not specified explicitly
-        if startrow is None and sheet_name in writer.book.sheetnames:
-            startrow = writer.book[sheet_name].max_row
-
-        # truncate sheet
-        if truncate_sheet and sheet_name in writer.book.sheetnames:
-            # index of [sheet_name] sheet
-            idx = writer.book.sheetnames.index(sheet_name)
-            # remove [sheet_name]
-            writer.book.remove(writer.book.worksheets[idx])
-            # create an empty sheet [sheet_name] using old index
-            writer.book.create_sheet(sheet_name, idx)
-
-        # copy existing sheets
-        writer.sheets = {ws.title:ws for ws in writer.book.worksheets}
-
-        if startrow is None:
-            startrow = 0
-
-        # write out the new sheet
-        df.to_excel(writer, sheet_name, startrow=startrow, **to_excel_kwargs)
-
+        df_outputs.to_excel(writer, sheet_name, startrow=startrow)
         # save the workbook
         writer.save()
 
 
+    def grind(**kwargs):
+        # Grind is going to be the function which takes a titration from the 
+        # master spreadsheet and outputs everything we could possibly want back
+        # to an output spreadsheet.
+        self.pipeline()
 
-        tit.write_to_excel("df_NaOH_output_values.xlsx",tit.df_NaOH, sheet_name='Sheet1')
+
 
     
 class MarkerHandler(HandlerBase):
@@ -952,3 +980,4 @@ class MarkerHandler(HandlerBase):
                         width, height, fontsize,trans):
         return [plt.Line2D([width/2], [height/2.],ls="",
                        marker=tup[1],color=tup[0], transform=trans)]
+
