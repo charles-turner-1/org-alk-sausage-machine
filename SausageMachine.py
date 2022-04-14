@@ -1007,32 +1007,39 @@ class OrgAlkTitration():
 class OrgAlkTitrationBatch():
     def __init__(self,master_spreadsheet_path=None
                 ,master_spreadsheet_filename=None
+                ,master_results_path=None
                 ,master_results_filename=None):
         self.master_spreadsheet_path=master_spreadsheet_path
         self.master_spreadsheet_filename=master_spreadsheet_filename
+        self.master_results_path=master_results_path
         self.master_results_filename=master_results_filename
 
-    def glob_master_spreadsheet(self):
         MS_filename_full = os.path.join(self.master_spreadsheet_path
                                        ,self.master_spreadsheet_filename)
         DF_MASTER = pd.read_excel(MS_filename_full)
         self.titrations = DF_MASTER["SAMPLE_TA"].tolist()
-        # This function will take a master spreadsheet path and filename and then
-        # figure out all the titrations in that master spreadsheet. Then, read 
-        # them to a 
+        # We need to check that we can find all the files listed in master spreadsheet
+        # at this point.
 
-    def batch_calculate(self,SSR_frac_change_limit=1e-8,plot_results=True):
+    def batch_calculate(self,SSR_frac_change_limit=1e-8,plot_results=False):
         # This is going to be the function which takes a master spreadsheet and 
         # outputs everything we could possibly want back to an output spreadsheet.
-        for titration_name in self.titrations:
+        if type(SSR_frac_change_limit) is float:
+            SSR_frac_change_limit = np.full(len(self.titrations),SSR_frac_change_limit)
+
+        for titration_name in enumerate(self.titrations):
+            print("Running titration " + titration_name[1])
             titration = OrgAlkTitration()
             titration.read_master_spreadsheet(self.master_spreadsheet_path
                                              ,self.master_spreadsheet_filename
-                                             ,titration_name) 
+                                             ,titration_name[1]) 
             titration.pipeline()
+            print(SSR_frac_change_limit[titration_name[0]])
             for i in np.arange(1,5):
-                titration.repeat_minimise(i,SSR_frac_change_limit,plot_results)
+                titration.repeat_minimise(i,SSR_frac_change_limit[titration_name[0]],plot_results)
             titration.select_output_params(batch_mode=True)
+            titration.write_results(self.master_results_path
+                                   ,self.master_results_filename)
 
 
 
