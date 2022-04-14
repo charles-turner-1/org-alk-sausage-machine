@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from IPython.display import Markdown, display
 
 
-class org_alk_titration():
+class OrgAlkTitration():
     def __init__(self,dataset_path=None,spreadsheet_name_TA = None
                                   ,spreadsheet_name_NaOH = None
                                   ,spreadsheet_name_OA = None):
@@ -40,8 +40,6 @@ class org_alk_titration():
         self.df_TA = None
         self.df_NaOH = None
         self.df_OA = None
-        self.titration_features["TA"]["mass_known"] = False
-        self.titration_features["NaOH"]["mass_known"] = False
         self.temp_TA_known = False
         self.E0_init_est_TA = None
         self.E0_init_est_OA = None
@@ -920,7 +918,8 @@ class org_alk_titration():
         if batch_mode is False:
             output_params = self.df_minimiser_outputs.iloc[row_to_select-1] # For some reason 1 based indexing not working in selection
         else:
-            output_params = self.df_minimiser_outputs.dropna()[:-1]
+            output_params = self.df_minimiser_outputs.dropna().iloc[-1]
+            row_to_select = self.df_minimiser_outputs.dropna().shape[0]
 
         if row_to_select < 4:
             output_params["X3"] = output_params["pK3"] = None
@@ -929,6 +928,7 @@ class org_alk_titration():
 
         for (label,content) in output_params.items():
             self.outputs[label] = content
+        self.outputs['SELECTED_MINIMISATION'] = row_to_select
 
     def write_results(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
         # In this function, we will look up the master results filename, and look
@@ -1004,12 +1004,35 @@ class org_alk_titration():
         # save the workbook
         writer.save()
 
+class OrgAlkTitrationBatch():
+    def __init__(self,master_spreadsheet_path=None
+                ,master_spreadsheet_filename=None
+                ,master_results_filename=None):
+        self.master_spreadsheet_path=master_spreadsheet_path
+        self.master_spreadsheet_filename=master_spreadsheet_filename
+        self.master_results_filename=master_results_filename
 
-    def grind(**kwargs):
-        # Grind is going to be the function which takes a titration from the 
-        # master spreadsheet and outputs everything we could possibly want back
-        # to an output spreadsheet.
-        self.pipeline()
+    def glob_master_spreadsheet(self):
+        MS_filename_full = os.path.join(self.master_spreadsheet_path
+                                       ,self.master_spreadsheet_filename)
+        DF_MASTER = pd.read_excel(MS_filename_full)
+        self.titrations = DF_MASTER["SAMPLE_TA"].tolist()
+        # This function will take a master spreadsheet path and filename and then
+        # figure out all the titrations in that master spreadsheet. Then, read 
+        # them to a 
+
+    def batch_calculate(self,SSR_frac_change_limit=1e-8,plot_results=True):
+        # This is going to be the function which takes a master spreadsheet and 
+        # outputs everything we could possibly want back to an output spreadsheet.
+        for titration_name in self.titrations:
+            titration = OrgAlkTitration()
+            titration.read_master_spreadsheet(self.master_spreadsheet_path
+                                             ,self.master_spreadsheet_filename
+                                             ,titration_name) 
+            titration.pipeline()
+            for i in np.arange(1,5):
+                titration.repeat_minimise(i,SSR_frac_change_limit,plot_results)
+            titration.select_output_params(batch_mode=True)
 
 
 
