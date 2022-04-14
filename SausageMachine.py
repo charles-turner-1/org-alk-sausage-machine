@@ -914,14 +914,13 @@ class org_alk_titration():
     def print_output_params(self):
             display(self.df_minimiser_outputs)
 
-    def select_output_params(self,row_to_select=None):
-        # In this function, print out the parameters from self.df_minimiser_outputs.
-        # Then, ask the user to select a row to save. Then write these to our 
-        # outputs dict.
-        if row_to_select is None:
-            display(self.df_minimiser_outputs)
-            row_to_select = input("Enter the row you wish to save")
-        output_params = self.df_minimiser_outputs.iloc[row_to_select-1] # For some reason 1 based indexing not working in selection
+    def select_output_params(self,row_to_select=None,batch_mode=False):
+        if row_to_select is not None and batch_mode is True:
+            raise AssertionError("If batch mode is enabled output row cannot be specified manually")
+        if batch_mode is False:
+            output_params = self.df_minimiser_outputs.iloc[row_to_select-1] # For some reason 1 based indexing not working in selection
+        else:
+            output_params = self.df_minimiser_outputs.dropna()[:-1]
 
         if row_to_select < 4:
             output_params["X3"] = output_params["pK3"] = None
