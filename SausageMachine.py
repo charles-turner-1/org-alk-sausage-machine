@@ -956,9 +956,9 @@ class OrgAlkTitration():
         df_outputs = pd.DataFrame([self.outputs])
 
         self.append_df_to_excel(output_filename,df_outputs)
+        #self.append_df_to_excel(output_filename,df_outputs,header=False)
 
     def append_df_to_excel(self,filename, df, sheet_name='Sheet1', startrow=None,
-                           truncate_sheet=False, 
                            **to_excel_kwargs):
         # Excel file doesn't exist - saving and exiting
         if not os.path.isfile(filename):
@@ -983,15 +983,6 @@ class OrgAlkTitration():
         if startrow is None and sheet_name in writer.book.sheetnames:
             startrow = writer.book[sheet_name].max_row
 
-        # truncate sheet
-        if truncate_sheet and sheet_name in writer.book.sheetnames:
-            # index of [sheet_name] sheet
-            idx = writer.book.sheetnames.index(sheet_name)
-            # remove [sheet_name]
-            writer.book.remove(writer.book.worksheets[idx])
-            # create an empty sheet [sheet_name] using old index
-            writer.book.create_sheet(sheet_name, idx)
-
         # copy existing sheets
         writer.sheets = {ws.title:ws for ws in writer.book.worksheets}
 
@@ -1003,6 +994,7 @@ class OrgAlkTitration():
 
         # save the workbook
         writer.save()
+        writer.close()
 
 class OrgAlkTitrationBatch():
     def __init__(self,master_spreadsheet_path=None
@@ -1034,10 +1026,11 @@ class OrgAlkTitrationBatch():
                                              ,self.master_spreadsheet_filename
                                              ,titration_name[1]) 
             titration.pipeline()
-            print(SSR_frac_change_limit[titration_name[0]])
             for i in np.arange(1,5):
                 titration.repeat_minimise(i,SSR_frac_change_limit[titration_name[0]],plot_results)
             titration.select_output_params(batch_mode=True)
+            # The following line is overwriting instead of appending. This is the
+            # behaviour which needs sorting
             titration.write_results(self.master_results_path
                                    ,self.master_results_filename)
 
