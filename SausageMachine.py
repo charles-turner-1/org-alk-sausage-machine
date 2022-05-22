@@ -1014,8 +1014,8 @@ class OrgAlkTitrationBatch():
             SSR_frac_change_limit = np.full(len(self.titrations),SSR_frac_change_limit)
 
         assert len(SSR_frac_change_limit) == len(self.titrations) , """If you pass 
-a list of SSR_frac_change_limits that list must be the same length as the
-number of titrations you wish to run""".replace('\n',' ')
+a list of SSR_frac_change_limits that list must be the same length as the number
+ of titrations you wish to run""".replace('\n',' ')
 
         for titration_name in enumerate(self.titrations):
             print("Running titration " + titration_name[1])
