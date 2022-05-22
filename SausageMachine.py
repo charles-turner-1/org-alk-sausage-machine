@@ -958,14 +958,15 @@ class OrgAlkTitration():
         self.append_df_to_excel(output_filename,df_outputs)
         #self.append_df_to_excel(output_filename,df_outputs,header=False)
 
-    def append_df_to_excel(self,filename, df, sheet_name='Sheet1', startrow=None,
+    def append_df_to_excel(self,filename, df, sheet_name='Sheet1',
                            **to_excel_kwargs):
+
         # Excel file doesn't exist - saving and exiting
         if not os.path.isfile(filename):
             df.to_excel(
                 filename,
                 sheet_name=sheet_name, 
-                startrow=startrow if startrow is not None else 0, 
+                startrow=0,
                 **to_excel_kwargs)
             return
 
@@ -974,21 +975,14 @@ class OrgAlkTitration():
             to_excel_kwargs.pop('engine')
 
         writer = pd.ExcelWriter(filename, engine='openpyxl', mode='a')
+        startrow = writer.sheets[sheet_name].max_row
 
         # try to open an existing workbook
         writer.book = load_workbook(filename)
 
-        # get the last row in the existing Excel sheet
-        # if it was not specified explicitly
-        if startrow is None and sheet_name in writer.book.sheetnames:
-            startrow = writer.book[sheet_name].max_row
 
         # copy existing sheets
         writer.sheets = {ws.title:ws for ws in writer.book.worksheets}
-
-        if startrow is None:
-            startrow = 0
-
         # write out the new sheet
         df.to_excel(writer, sheet_name, startrow=startrow, **to_excel_kwargs)
 
@@ -1018,6 +1012,10 @@ class OrgAlkTitrationBatch():
         # outputs everything we could possibly want back to an output spreadsheet.
         if type(SSR_frac_change_limit) is float:
             SSR_frac_change_limit = np.full(len(self.titrations),SSR_frac_change_limit)
+
+        assert len(SSR_frac_change_limit) == len(self.titrations) , """If you pass 
+a list of SSR_frac_change_limits that list must be the same length as the
+number of titrations you wish to run""".replace('\n',' ')
 
         for titration_name in enumerate(self.titrations):
             print("Running titration " + titration_name[1])
