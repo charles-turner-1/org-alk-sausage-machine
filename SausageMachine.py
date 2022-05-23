@@ -40,9 +40,81 @@ class OrgAlkTitration():
         self.df_TA = None
         self.df_NaOH = None
         self.df_OA = None
+        self.df_outputs = None
         self.temp_TA_known = False
         self.E0_init_est_TA = None
         self.E0_init_est_OA = None
+        self.titration_features = {
+            "TA" : {
+                "slope_rho" : -0.0008958,
+                "intercept_rho" : 1.02119193,
+                "df_T_label" : "Acid_T",   
+                "mass_known" : False,
+                "TA_est" : None,
+                "E0_init_est" : None,
+                "initial_EV" : None,
+                "initial_K" : None,
+                "titration_soln" : None,
+                "E0_final" : None,
+                "TA_final" : None,
+                "TA_processed" : None,
+                "data_start" : None,
+            },
+            "NaOH" : {
+                "slope_rho" : -0.014702658,
+                "intercept_rho" : 1.27068345,
+                "df_T_label" : "NaOH_T",
+                "mass_known" : False,
+                "TA_est" : None,
+                "E0_init_est" : None,
+                "initial_EV" : None,
+                "initial_K" : None,
+                "titration_soln" : None,
+            },
+            "OA" : {
+                "slope_rho" : -0.0008958,  # Should probably remove default as it's specific to the user ie. this will cause errors nobody understands
+                "intercept_rho" : 1.02119193,
+                "df_T_label" : "Acid_T",
+                "initial_EV" : None,
+                "initial_K" : None,
+                "titration_soln" : None,
+                "E0_final" : None,
+                "TA_final" : None,
+                "TA_processed" : None,
+                "data_start" : None,
+            }
+        }
+        self.equilibrium_constants = {
+            "K_X1" : 10**-4.5,  # 10**-4.5 #midpoint pH 3 - 7,
+            "K_X2" : 10**-5.25, # 10**-5.25 #midpoint pH 3 - 7.55,
+            "K_X3" : 10**-5.5,   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
+            "Carbonate" : "Lueker"
+        }
+        self.outputs = {
+            "SAMPLE" : None,
+            "SALINITY" : None,
+            "TA" : None,
+            "ORGALK" : None,
+            "MASS" : None,
+            "H0" : None,
+            "X1" : None,
+            "X2" : None,
+            "X3" : None,
+            "pK1" : None,
+            "pK2" : None,
+            "pK3" : None,
+            "CONVERGENCE_FACTOR" : None,
+            "pK1_INITIAL" : 4.5,
+            "pK2_INITIAL" : 5.25,
+            "pK3_INITIAL" : 5.5,
+            }
+        self.species_concentrations = {
+            "BT" : 0.0004157,
+            "SiT" : 0,
+            "PT" : 0,
+            "CTNa" : 14.999,
+        }
+
     ########################################################
     #CONSTANTS CALCULATED BASED ON SALINITY AND TEMPERATURE#
     ########################################################
@@ -50,80 +122,6 @@ class OrgAlkTitration():
     R = 8.314472 # Universal gas constant
     F = 96485.3399 # Faraday constant
 
-
-    titration_features = {
-        "TA" : {
-            "slope_rho" : -0.0008958,
-            "intercept_rho" : 1.02119193,
-            "df_T_label" : "Acid_T",   
-            "mass_known" : False,
-            "TA_est" : None,
-            "E0_init_est" : None,
-            "initial_EV" : None,
-            "initial_K" : None,
-            "titration_soln" : None,
-            "E0_final" : None,
-            "TA_final" : None,
-            "TA_processed" : None,
-            "data_start" : None,
-        },
-        "NaOH" : {
-            "slope_rho" : -0.014702658,
-            "intercept_rho" : 1.27068345,
-            "df_T_label" : "NaOH_T",
-            "mass_known" : False,
-            "TA_est" : None,
-            "E0_init_est" : None,
-            "initial_EV" : None,
-            "initial_K" : None,
-            "titration_soln" : None,
-        },
-        "OA" : {
-            "slope_rho" : -0.0008958,  # Should probably remove default as it's specific to the user ie. this will cause errors nobody understands
-            "intercept_rho" : 1.02119193,
-            "df_T_label" : "Acid_T",
-            "initial_EV" : None,
-            "initial_K" : None,
-            "titration_soln" : None,
-            "E0_final" : None,
-            "TA_final" : None,
-            "TA_processed" : None,
-            "data_start" : None,
-        }
-    }
-
-    equilibrium_constants = {
-        "K_X1" : 10**-4.5,  # 10**-4.5 #midpoint pH 3 - 7,
-        "K_X2" : 10**-5.25, # 10**-5.25 #midpoint pH 3 - 7.55,
-        "K_X3" : 10**-5.5,   # 10**-5.5 #midpoint pH 3 - 8 (pH 8 approximate max pH)
-        "Carbonate" : "Lueker"
-    }
-
-    outputs = {
-        "SAMPLE" : None,
-        "SALINITY" : None,
-        "TA" : None,
-        "ORGALK" : None,
-        "MASS" : None,
-        "H0" : None,
-        "X1" : None,
-        "X2" : None,
-        "X3" : None,
-        "pK1" : None,
-        "pK2" : None,
-        "pK3" : None,
-        "CONVERGENCE_FACTOR" : None,
-        "pK1_INITIAL" : 4.5,
-        "pK2_INITIAL" : 5.25,
-        "pK3_INITIAL" : 5.5,
-        }
-
-    species_concentrations = {
-        "BT" : 0.0004157,
-        "SiT" : 0,
-        "PT" : 0,
-        "CTNa" : 14.999,
-    }
 
     def set_concentrations(self,C_HCl  = 0.10060392
                                ,C_NaOH = 0.082744091
@@ -929,6 +927,12 @@ class OrgAlkTitration():
         for (label,content) in output_params.items():
             self.outputs[label] = content
         self.outputs['SELECTED_MINIMISATION'] = row_to_select
+        self.outputs["H0"] = self.H0
+
+        self.outputs["TA"] = self.titration_features["TA"]["TA_final"] 
+        self.outputs["ORGALK"] = self.titration_features["OA"]["TA_final"] 
+
+        self.outputs["MASS"] = self.df_NaOH['m'][self.df_NaOH.index[-1]]
 
     def write_results(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
         # In this function, we will look up the master results filename, and look
@@ -937,36 +941,66 @@ class OrgAlkTitration():
         # append all relevant results to the master filename
         output_filename = os.path.join(master_results_path,master_results_filename)
         sample_filename = self.TA_filename
-        df_outputs = pd.read_excel(output_filename)
+        self.df_outputs= pd.read_excel(output_filename)
 
-        if sample_filename in df_outputs['SAMPLE'].to_list():
+
+        if sample_filename in self.df_outputs['SAMPLE'].to_list():
             raise KeyError("""You are trying to write to a sample name which is already present in the master results file. Exiting to avoid potentially overwriting previous results.""")
         else:
             self.outputs["SAMPLE"] = sample_filename
         # If we've got this far we now need to create the dataframe that we will 
-        # write to this row. Lets start with the stuff which is initial values, 
-        # not calculated
+        # write to this row. 
+        self.df_outputs_to_add = pd.DataFrame([self.outputs])
+        self.df_outputs = pd.concat([self.df_outputs,self.df_outputs_to_add])
 
-        self.outputs["H0"] = self.H0
-
-        self.outputs["TA"] = self.titration_features["TA"]["TA_final"] 
-        self.outputs["ORGALK"] = self.titration_features["OA"]["TA_final"] 
-
-        self.outputs["MASS"] = self.df_NaOH['m'][self.df_NaOH.index[-1]]
-        df_outputs = pd.DataFrame([self.outputs])
-
-        self.append_df_to_excel(output_filename,df_outputs)
+        self.df_outputs.to_excel(output_filename, sheet_name)
         #self.append_df_to_excel(output_filename,df_outputs,header=False)
 
-    def append_df_to_excel(self,filename, df, sheet_name='Sheet1',
-                           **to_excel_kwargs):
+    def copy_to_excel(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
+        pass
 
+    def append_df_to_excel(self,filename, df, sheet_name='Sheet1', startrow=None,
+                           truncate_sheet=False, 
+                           **to_excel_kwargs):
+        """
+        Append a DataFrame [df] to existing Excel file [filename]
+        into [sheet_name] Sheet.
+        If [filename] doesn't exist, then this function will create it.
+
+        @param filename: File path or existing ExcelWriter
+                         (Example: '/path/to/file.xlsx')
+        @param df: DataFrame to save to workbook
+        @param sheet_name: Name of sheet which will contain DataFrame.
+                           (default: 'Sheet1')
+        @param startrow: upper left cell row to dump data frame.
+                         Per default (startrow=None) calculate the last row
+                         in the existing DF and write to the next row...
+        @param truncate_sheet: truncate (remove and recreate) [sheet_name]
+                               before writing DataFrame to Excel file
+        @param to_excel_kwargs: arguments which will be passed to `DataFrame.to_excel()`
+                                [can be a dictionary]
+        @return: None
+
+        Usage examples:
+
+        >>> append_df_to_excel('d:/temp/test.xlsx', df)
+
+        >>> append_df_to_excel('d:/temp/test.xlsx', df, header=None, index=False)
+
+        >>> append_df_to_excel('d:/temp/test.xlsx', df, sheet_name='Sheet2',
+                               index=False)
+
+        >>> append_df_to_excel('d:/temp/test.xlsx', df, sheet_name='Sheet2', 
+                               index=False, startrow=25)
+
+        (c) [MaxU](https://stackoverflow.com/users/5741205/maxu?tab=profile)
+        """
         # Excel file doesn't exist - saving and exiting
         if not os.path.isfile(filename):
             df.to_excel(
                 filename,
                 sheet_name=sheet_name, 
-                startrow=0,
+                startrow=startrow if startrow is not None else 0, 
                 **to_excel_kwargs)
             return
 
@@ -975,20 +1009,35 @@ class OrgAlkTitration():
             to_excel_kwargs.pop('engine')
 
         writer = pd.ExcelWriter(filename, engine='openpyxl', mode='a')
-        startrow = writer.sheets[sheet_name].max_row
 
         # try to open an existing workbook
         writer.book = load_workbook(filename)
 
+        # get the last row in the existing Excel sheet
+        # if it was not specified explicitly
+        if startrow is None and sheet_name in writer.book.sheetnames:
+            startrow = writer.book[sheet_name].max_row
+
+        # truncate sheet
+        if truncate_sheet and sheet_name in writer.book.sheetnames:
+            # index of [sheet_name] sheet
+            idx = writer.book.sheetnames.index(sheet_name)
+            # remove [sheet_name]
+            writer.book.remove(writer.book.worksheets[idx])
+            # create an empty sheet [sheet_name] using old index
+            writer.book.create_sheet(sheet_name, idx)
 
         # copy existing sheets
         writer.sheets = {ws.title:ws for ws in writer.book.worksheets}
+
+        if startrow is None:
+            startrow = 0
+
         # write out the new sheet
         df.to_excel(writer, sheet_name, startrow=startrow, **to_excel_kwargs)
 
         # save the workbook
         writer.save()
-        writer.close()
 
 class OrgAlkTitrationBatch():
     def __init__(self,master_spreadsheet_path=None
