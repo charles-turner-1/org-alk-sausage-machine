@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import math
 import os
+import warnings
 import matplotlib.pyplot as plt
 
 from scipy.stats import linregress
@@ -104,6 +105,7 @@ class OrgAlkTitration():
             "pK2" : None,
             "pK3" : None,
             "CONVERGENCE_FACTOR" : None,
+            "CONVERGENCE_FLAG" : 0,
             "pK1_INITIAL" : 4.5,
             "pK2_INITIAL" : 5.25,
             "pK3_INITIAL" : 5.5,
@@ -842,18 +844,26 @@ class OrgAlkTitration():
             SSR = np.sum((cleaned_dataframe['m']-cleaned_dataframe["m_calc_004"])**2)
         return SSR 
 
-    def repeat_minimise(self,minimiser_no,SSR_frac_change_limit=1e-4,plot_results=True):
-        # Rewrite this so that it starts at 1e-8 and will repeatedly reduce the
+    def repeat_minimise(self,minimiser_no,SSR_frac_change_limit=1e-10,plot_results=True):
+        # Rewrite this so that it starts at 1e-10 and will repeatedly reduce the
         # fractional change limit up to 1e-3, then flag a warning instead of 
         # raising an error, write a warning flag out to the master spreadsheet 
         # file
+        class IncreasingSSRFracChangeLim(UserWarning):
+            pass
+
         self.minimise(minimiser_no)
         SSR_init = self.ssr(minimiser_no)
         SSR_frac_change = 1
         num_reps = 0
         while SSR_frac_change > SSR_frac_change_limit:
             if num_reps > 100:
-                raise Exception("This doesn't look like its going to work after 100 repetitions. Try reducing fractional change limit.")
+                warnings.warn(f"Minimiser convergence not converging at SSR_frac_change_limit = {SSR_frac_change_limit}, increasing to {10*SSR_frac_change_limit}",IncreasingSSRFracChangeLim)
+                SSR_frac_change_limit *= 10
+                num_reps = 0
+            if SSR_frac_change_limit > 1e-3:
+                warnings.warn(f"SSR_frac_change_limit = {SSR_frac_change_limit}, flagging results as unreliable",IncreasingSSRFracChangeLim)
+                self.outputs["CONVERGENCE_FLAG"] = 1
             self.minimise(minimiser_no)
             SSR = self.ssr(minimiser_no)
             SSR_frac_change = (((SSR  - SSR_init)/ SSR_init)**2)**0.5
