@@ -469,6 +469,8 @@ class OrgAlkTitration():
         initial_EV_NaOH = dataframe.iloc[0]['102 Voltage (V)'] #Proton concentration prior to NaOH addition, H0, defined as [H+] at end of first (TA) titration (start of NaOH titration)
         initial_K_NaOH = dataframe.iloc[0]['K']
         self.H0 = (np.exp((initial_EV_NaOH-E0)/(initial_K_NaOH)))
+        self.max_pH_NaOH = dataframe["pH"].max()
+        self.min_pH_NaOH = dataframe["pH"].min()
 
 
     def pipeline(self):
