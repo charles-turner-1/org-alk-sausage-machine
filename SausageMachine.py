@@ -450,7 +450,7 @@ class OrgAlkTitration():
         E0_final = E0_processed.mean() #FINAL ESTIMATE OF E0
 
         self.titration_features["TA"]["Initial_pH_TA"] = -np.log10(np.exp((
-        self.titration_features["TA"]["initial_EV"] - E0_final)/self.initial_K))
+            self.titration_features["TA"]["initial_EV"] - E0_final)/self.initial_K))
 
         self.titration_features[titration_label]["E0_final"] = E0_final
         self.titration_features[titration_label]["TA_final"] = TA_final
