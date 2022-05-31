@@ -317,7 +317,7 @@ class OrgAlkTitration():
 
         dataframe["T"] = (dataframe["Sample_T"]+273.15)  # CREATE COLUMN SAMPLE TEMPERATURE (KELVIN) AT EACH TITRATION POINT
         dataframe["K"] = (self.R*dataframe['T'])/self.F # Nernst factor 
-        initial_K = dataframe.iloc[9]['K'] # Initial Nernst factor, used to calculate initial pH
+        self.initial_K = dataframe.iloc[9]['K'] # Initial Nernst factor, used to calculate initial pH
 
         self.titration_features[titration_label]["initial_K"] = initial_K
 
@@ -448,6 +448,9 @@ class OrgAlkTitration():
 
         E0_processed = E0_init_est + dataframe["K"]*np.log(f) #CALCULATE E0 FROM NLSF F VALUE
         E0_final = E0_processed.mean() #FINAL ESTIMATE OF E0
+
+        self.titration_features["TA"]["Initial_pH_TA"] = -np.log10(np.exp((
+        self.titration_features["TA"]["initial_EV"] - E0_final)/self.initial_K))
 
         self.titration_features[titration_label]["E0_final"] = E0_final
         self.titration_features[titration_label]["TA_final"] = TA_final
