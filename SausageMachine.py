@@ -444,7 +444,7 @@ class OrgAlkTitration():
         #################################
         TA_processed = result.params.get('TA_est_NLSF').value #EXTRACT INTIAL TA VALUE M/KG-1
         TA_final = TA_processed*10**6 #COVERT INTIAL TA VALUE TO µmol/KG-1
-        f = 1 if titration_label == "TA" else result.params.get('f_NLSF').value  
+        result.params.get('f_NLSF').value  
 
         E0_processed = E0_init_est + dataframe["K"]*np.log(f) #CALCULATE E0 FROM NLSF F VALUE
         E0_final = E0_processed.mean() #FINAL ESTIMATE OF E0
