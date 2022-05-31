@@ -998,25 +998,19 @@ class OrgAlkTitrationBatch():
         # We need to check that we can find all the files listed in master spreadsheet
         # at this point.
 
-    def batch_calculate(self,SSR_frac_change_limit=1e-8,plot_results=False):
+    def batch_calculate(self,plot_results=False):
         # This is going to be the function which takes a master spreadsheet and 
         # outputs everything we could possibly want back to an output spreadsheet.
-        if type(SSR_frac_change_limit) is float:
-            SSR_frac_change_limit = np.full(len(self.titrations),SSR_frac_change_limit)
 
-        assert len(SSR_frac_change_limit) == len(self.titrations) , """If you pass 
-a list of SSR_frac_change_limits that list must be the same length as the number
- of titrations you wish to run""".replace('\n',' ')
-
-        for titration_name in enumerate(self.titrations):
-            print("Running titration " + titration_name[1])
+        for titration_name in self.titrations:
+            print("Running titration " + titration_name)
             titration = OrgAlkTitration()
             titration.read_master_spreadsheet(self.master_spreadsheet_path
                                              ,self.master_spreadsheet_filename
-                                             ,titration_name[1]) 
+                                             ,titration_name) 
             titration.pipeline()
             for i in np.arange(1,5):
-                titration.repeat_minimise(i,SSR_frac_change_limit[titration_name[0]],plot_results)
+                titration.repeat_minimise(minimiser_no=i,plot_results=plot_results)
             titration.select_output_params(batch_mode=True)
             # The following line is overwriting instead of appending. This is the
             # behaviour which needs sorting
