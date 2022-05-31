@@ -843,7 +843,10 @@ class OrgAlkTitration():
         return SSR 
 
     def repeat_minimise(self,minimiser_no,SSR_frac_change_limit=1e-4,plot_results=True):
-
+        # Rewrite this so that it starts at 1e-8 and will repeatedly reduce the
+        # fractional change limit up to 1e-3, then flag a warning instead of 
+        # raising an error, write a warning flag out to the master spreadsheet 
+        # file
         self.minimise(minimiser_no)
         SSR_init = self.ssr(minimiser_no)
         SSR_frac_change = 1
@@ -874,11 +877,11 @@ class OrgAlkTitration():
         if minimiser_no == 1:
             print('X1 (initial):', self.X1*10**6, "| pK1(initial): ", -np.log10(self.K_X1), '| H0 :', self.H0 ) 
         elif minimiser_no == 2:
-            print('X1:', self.X1*10**6, "| pK1: ", -np.log10(self.K_X1), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
+            print('X1:', self.X1*10**6, "| pK1: ", -np.log10(self.K_X1)) 
         elif minimiser_no == 3:
-            print('X2:', self.X2*10**6, "| pK2: ", -np.log10(self.K_X2), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
+            print('X2:', self.X2*10**6, "| pK2: ", -np.log10(self.K_X2)) 
         elif minimiser_no == 4:
-            print('X3:', self.X3*10**6, "| pK3: ", -np.log10(self.K_X3), '| Deviation % (g) NaOH :', (SSR/self.Vb)*100 ) 
+            print('X3:', self.X3*10**6, "| pK3: ", -np.log10(self.K_X3), '| Sample:', self.OA_filename )
 
         m_calc_labels = ["m_calc_001","m_calc_002","m_calc_003","m_calc_004"]
 
@@ -894,7 +897,8 @@ class OrgAlkTitration():
             y_meas = dataframe["pH"]
             y_calc = dataframe["pH"]
 
-            plt.xlabel('NaOH added (g)', fontsize=18)
+            plt.xlabel('NaOH (g)', fontsize=18)
+            plt.ylabel('pH', fontsize=18)
             graph = plt.scatter(x_meas, y_meas, c = 'black', marker = "1")
             graph = plt.plot(x_calc, y_calc, c = 'red')
             plt.grid(False)
