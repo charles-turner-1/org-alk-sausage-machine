@@ -321,7 +321,7 @@ class OrgAlkTitration():
         dataframe["K"] = (self.R*dataframe['T'])/self.F # Nernst factor 
         self.initial_K = dataframe.iloc[9]['K'] # Initial Nernst factor, used to calculate initial pH
 
-        self.titration_features[titration_label]["initial_K"] = initial_K
+        self.titration_features[titration_label]["initial_K"] = self.initial_K
 
         if titration_label == "OA":
             self.titration_features[titration_label]["initial_EV"] = dataframe.iloc[0]['E(V)'] #EV of sample before any acid addition
@@ -446,7 +446,7 @@ class OrgAlkTitration():
         #################################
         TA_processed = result.params.get('TA_est_NLSF').value #EXTRACT INTIAL TA VALUE M/KG-1
         TA_final = TA_processed*10**6 #COVERT INTIAL TA VALUE TO µmol/KG-1
-        result.params.get('f_NLSF').value  
+        f = result.params.get('f_NLSF').value  
 
         E0_processed = E0_init_est + dataframe["K"]*np.log(f) #CALCULATE E0 FROM NLSF F VALUE
         E0_final = E0_processed.mean() #FINAL ESTIMATE OF E0
