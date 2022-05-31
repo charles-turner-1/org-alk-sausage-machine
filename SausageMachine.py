@@ -936,6 +936,9 @@ class OrgAlkTitration():
 
         self.outputs["MASS"] = self.df_NaOH['m'][self.df_NaOH.index[-1]]
 
+        self.outputs["max_pH_NaOH"] = self.max_pH_NaOH
+        self.outputs["min_pH_NaOH"] = self.min_pH_NaOH
+
     def write_results(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
         # In this function, we will look up the master results filename, and look
         # for a row that contains a sample with the name of our sample we are 
