@@ -85,6 +85,8 @@ class OrgAlkTitration():
                 "data_start" : None,
             }
         }
+        # This is probably not necessary. Right now these are just default values.
+        # In addition, a default set of constants is probably dumb too.
         self.equilibrium_constants = {
             "K_X1" : 10**-4.5,  # 10**-4.5 #midpoint pH 3 - 7,
             "K_X2" : 10**-5.25, # 10**-5.25 #midpoint pH 3 - 7.55,
@@ -105,7 +107,8 @@ class OrgAlkTitration():
             "pK2" : None,
             "pK3" : None,
             "CONVERGENCE_FACTOR" : None,
-            "CONVERGENCE_FLAG" : 0,
+            "SSR_FLAG" : 0,
+            "OUTPUT_RELIABILITY_FLAG" : 0,
             "pK1_INITIAL" : 4.5,
             "pK2_INITIAL" : 5.25,
             "pK3_INITIAL" : 5.5,
@@ -562,7 +565,7 @@ class OrgAlkTitration():
                           *np.log(dataframe["T"])+ (0.053105*dataframe["S"]**0.5)*dataframe["T"] )
 
         self.species_concentrations['BT'] = inc_Boron * 0.0004157*self.S_TA/35 #TOTAL BORON [BT], (LEE2010) S VALUE IS ORIGINAL SAMPLE S
-        self.species_concentrations['CTNa'] *= inc_CTNa *1e-6 *(self.Vb/1000)
+        self.species_concentrations['CTNa'] *= (inc_CTNa * self.Vb)* 1e-6 
         # Since Boron and CO2 are both false by default, I'm pretty sure that this should make sure they don't contribute 
         # unless specified.
 
@@ -665,7 +668,7 @@ class OrgAlkTitration():
         if minimiser_no == 1:
             dataframe = dataframe[dataframe["pH"].between(0,5)]
         elif minimiser_no == 2:
-            max_pH = dataframe["pH"].max()*0.8
+            max_pH = dataframe["pH"].max()*0.85
             if max_pH < 5:
                 raise ValueError("Max pH must be greater than 5")
             self.max_pH = max_pH
@@ -849,7 +852,7 @@ class OrgAlkTitration():
         # fractional change limit up to 1e-3, then flag a warning instead of 
         # raising an error, write a warning flag out to the master spreadsheet 
         # file
-        class IncreasingSSRFracChangeLim(UserWarning):
+        class UnreliableSSRValue(UserWarning):
             pass
 
         self.minimise(minimiser_no)
@@ -861,9 +864,6 @@ class OrgAlkTitration():
                 warnings.warn(f"Minimiser convergence not converging at SSR_frac_change_limit = {SSR_frac_change_limit}, increasing to {10*SSR_frac_change_limit}",IncreasingSSRFracChangeLim)
                 SSR_frac_change_limit *= 10
                 num_reps = 0
-            if SSR_frac_change_limit > 1e-3:
-                warnings.warn(f"SSR_frac_change_limit = {SSR_frac_change_limit}, flagging results as unreliable",IncreasingSSRFracChangeLim)
-                self.outputs["CONVERGENCE_FLAG"] = 1
             self.minimise(minimiser_no)
             SSR = self.ssr(minimiser_no)
             SSR_frac_change = (((SSR  - SSR_init)/ SSR_init)**2)**0.5
@@ -871,6 +871,14 @@ class OrgAlkTitration():
             num_reps += 1
         print(f"Minimisation repeated {num_reps} times in order to reach fractional change of {SSR_frac_change_limit} in SSR")
         print(f"Final SSR value = {SSR:.5f}")
+
+        if 0.005 < SSR < 0.01:
+            warnings.warn(f"SSR value = {SSR_frac_change_limit}, flagging results as suspect (value 1)",UnreliableSSRValue)
+            self.outputs["SSR_FLAG"] = 1
+        elif SSR >= 0.01:
+            warnings.warn(f"SSR value = {SSR_frac_change_limit}, flagging results as unreliable (value 2)",UnreliableSSRValue)
+            self.outputs["SSR_FLAG"] = 2
+
 
 
         self.df_minimiser_outputs["SSR"][minimiser_no] = SSR
@@ -957,6 +965,9 @@ class OrgAlkTitration():
         self.outputs["min_pH_NaOH"] = self.min_pH_NaOH
 
         self.outputs["Initial_pH_TA"] = self.titration_features["TA"]["Initial_pH_TA"]
+
+        if row_to_select < 2 or self.outputs["SSR_FLAG"] > 0:
+            self.outputs["OUTPUT_RELIABILITY_FLAG"] = 1
 
     def write_results(self,master_results_path,master_results_filename,sheet_name="Sheet1"):
         # In this function, we will look up the master results filename, and look
